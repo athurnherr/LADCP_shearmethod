@@ -1,0 +1,595 @@
+#!/usr/bin/perl
+#======================================================================
+#                    L A D C P P R O C 
+#                    doc: Thu Sep 16 20:36:10 2010
+#                    dlm: Tue Oct 26 14:29:05 2010
+#                    (c) 2010 A.M. Thurnherr & E. Firing
+#                    uE-Info: 299 61 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+$antsSummary = 'process LADCP data to get shear, time series';
+
+# NOTES:
+#	- THE CORE OF THIS CODE IS A SIMPLE TRANSCRIPTION OF MERGE.C WRITTEN BY ERIC FIRING
+#	- comments starting with ## are taken from Eric's code
+#	- CTD elapsed time is estimated from recno * CTD_sampint
+#	- CTD_elapsed is undefined for records before instrument is in the water
+#	- ITS-90 temp field in degC required
+#	- salin field prequired
+#	- pressure field in dbar required
+
+# HISTORY:
+#	Sep 16, 2010: - incepted
+#	Oct 13, 2010: - first working version
+#	Oct 14, 2010: - renamed from LADCPshear
+#	Oct 19, 2010: - added -a)coustic backscatter profiles
+#	Oct 20, 2010: - added -2)dary CTD sensors
+#	Oct 23, 2010: - added magnetic-declination correction
+#	Oct 26, 2010: - added tilt calculation
+
+($ANTS) 	  = (`which list` =~ m{^(.*)/[^/]*$});
+($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
+($LADCPPROC)  = ($0 =~ m{^(.*)/[^/]*$});
+
+require "$ANTS/ants.pl";
+require "$ANTS/libEOS83.pl";
+require "$ANTS/libstats.pl";
+require "$LADCPPROC/LADCPproc.bestLag";
+require "$LADCPPROC/LADCPproc.BT";
+require "$LADCPPROC/LADCPproc.backscatter";
+require "$LADCPPROC/LADCPproc.UHcode";
+require "$PERL_TOOLS/RDI_BB_Read.pl";
+require "$PERL_TOOLS/RDI_Coords.pl";
+require "$PERL_TOOLS/RDI_Utils.pl";
+
+$antsParseHeader = 0;
+&antsUsage('24ab:df:l:n:ops:t:w:',2,
+	'[use -2)dary CTD sensor pair]',
+	'[require -4)-beam LADCP solutions]',
+	'[-s)etup <file>]',
+	'[enable -p)PI editing]',
+	'[-l)ag LADCP <by>] [auto-lag -w)indow <size[60s]>] [-n) <auto-lag windows[20]]',
+	'[-d)iagnostic output]',
+	'output: [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
+	'        [-a)coustic backscatter profiles] [b-o)toom-track profs]',
+	'<RDI file> <SeaBird file>');
+
+$RDI_Coords::minValidVels = 4 if ($opt_4);
+
+&antsFloatOpt($opt_l);
+&antsCardOpt(\$opt_w,60);
+	# old default of -w 30 does not work if there are significant ambiguity-velocity
+	# problems, as is the case, e.g., with 2010_DIMES_US2 station 142
+&antsCardOpt(\$opt_n,20);
+
+$LADCP_file = &antsFileArg();
+$CTD_file 	= &antsFileArg();
+
+&antsAddParams('LADCP_file',$LADCP_file,'CTD_file',$CTD_file);
+&antsActivateOut();
+
+#----------------------------------------------------------------------
+# Step 1: Read Data
+#----------------------------------------------------------------------
+
+print(STDERR "Reading LADCP data ($LADCP_file)...");
+readData($LADCP_file,\%LADCP);
+printf(STDERR "\n\t%d ensembles\n",scalar(@{$LADCP{ENSEMBLE}}));
+
+print(STDERR "Reading CTD data ($CTD_file)...");
+open(F,$CTD_file) || croak("$CTD_file: $!\n");
+while (1) {															# parse header
+	chomp($hdr = <F>);
+	$hdr =~ s/\r*$//;
+	croak("$0: unexpected EOF (format error)\n") unless defined($hdr);
+	last if ($hdr eq '*END*');
+	
+	$CTD_nfields = $',next if ($hdr =~ /nquan = /);					# Layout
+	$CTD_nrecs = $',next if ($hdr =~ /nvalues = /);
+	$pressF = $1,next if ($hdr =~ /name (\d+) = prDM:/);
+	if ($opt_2) {
+		$tempF  = $1,next if ($hdr =~ /name (\d+) = t190C:/);
+		$salinF = $1,next if ($hdr =~ /name (\d+) = sal11:/);
+	} else {
+		$tempF  = $1,next if ($hdr =~ /name (\d+) = t090C:/);
+		$salinF = $1,next if ($hdr =~ /name (\d+) = sal00:/);
+	}
+
+	&antsAddParams('start_time',$1),next							# selected metadata
+		if ($hdr =~ /start_time = (.*)/);
+
+	&antsAddParams('station',$1),next
+		if ($hdr =~ /Station\s*:\s*(.*)/);
+	&antsAddParams('ship',$1),next
+		if ($hdr =~ /Ship\s*:\s*(.*)\s*$/);
+	&antsAddParams('cruise',$1),next
+		if ($hdr =~ /Cruise\s*:\s*(.*)\s*$/);
+	&antsAddParams('time',$1),next
+		if ($hdr =~ /Time\s*:\s*(.*)/);
+	&antsAddParams('date',$1),next
+		if ($hdr =~ /Date\s*:\s*(.*)/);
+
+	if ($hdr =~ /Latitude\s*[=:]\s*/) {
+		($deg,$min,$NS) = split(/ /,$');
+		$lat = $deg + $min/60;
+		$lat *= -1 if ($NS eq 'S');
+		&antsAddParams('lat',$lat);
+		next;
+	}
+	if ($hdr =~ /Longitude\s*[=:]\s*/) {
+		($deg,$min,$EW) = split(/ /,$');
+		$lon = $deg + $min/60;
+		$lon *= -1 if ($EW eq 'W');
+		&antsAddParams('lon',$lon);
+		next;
+	}
+	
+	if ($hdr =~ /interval = seconds: /) {
+		$CTD_sampint = 1*$';
+		&antsAddParams('CTD_interval',1/$CTD_sampint);
+		next;
+	}
+	
+	$CTD_badval = $',next
+		if ($hdr =~ /bad_flag = /);	
+	$CTD_file_type = $',next
+		if ($hdr =~ /file_type = /);	
+}
+
+croak("$CTD_file: cannot determine CTD file layout\n")
+	unless ($CTD_nfields && $CTD_nrecs);
+croak("$CTD_file: cannot determine missing value\n")
+	unless defined($CTD_badval);
+croak("$CTD_file: not a CTD time series file\n")
+	unless ($CTD_sampint);
+croak("$CTD_file: no pressure field\n")
+	unless defined($pressF);
+croak("$CTD_file: no suitable temperature field\n")
+	unless defined($tempF);
+croak("$CTD_file: no suitable salinity field\n")
+	unless defined($salinF);
+
+croak("$0: unknown latitude\n") unless defined($lat);
+croak("$0: unknown longitude\n") unless defined($lon);
+
+&antsAddParams('ITS',$P{ITS} = 90);
+
+if ($CTD_file_type eq 'ascii') {
+	while (1) {
+		last unless (@rec = &antsFileIn(F));
+		push(@CTD_press,($rec[$pressF] == $CTD_badval) ? nan : $rec[$pressF]);
+		push(@CTD_temp, ($rec[$tempF]  == $CTD_badval) ? nan : $rec[$tempF]);
+		push(@CTD_salin,($rec[$salinF] == $CTD_badval) ? nan : $rec[$salinF]);
+	}
+} elsif ($CTD_file_type eq 'binary') {
+
+	my($fbits) = 8 * length(pack('f',0));
+	croak(sprintf("$0: incompatible native CPU float representation (%d instead of 32bits)\n",fbits))
+		unless ($fbits == 32);	
+		
+	croak("$CTD_file: can't read binary data\n")
+		unless (read(F,$dta,4*$CTD_nfields*$CTD_nrecs) == 4*$CTD_nfields*$CTD_nrecs);
+	print(STDERR "$CTD_file: WARNING: extraneous data at EOF\n") unless eof(F);
+
+	$dta = pack('V*',unpack('N*',$dta))				# big-endian CPU
+		if (unpack('h*', pack('s', 1)) =~ /01/);	# c.f. perlport(1)
+	
+	@dta = unpack("f*",$dta);
+
+	for ($r=0; $r<$CTD_nrecs; $r++) {
+		push(@CTD_press,($dta[$r*$CTD_nfields+$pressF] == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$pressF]);
+		push(@CTD_temp, ($dta[$r*$CTD_nfields+$tempF]  == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$tempF]);
+		push(@CTD_salin,($dta[$r*$CTD_nfields+$salinF] == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$salinF]);
+	}
+} else {
+	croak("$CTD_file: unknown CTD file type $CTD_file_type\n");
+}
+
+printf(STDERR "\n\t%d scans\n",scalar(@CTD_press));
+
+#----------------------------------------------------------------------
+# Step 2: Set Processing Parameters
+#----------------------------------------------------------------------
+
+print(STDERR "Setting processing parameters...\n");
+
+printf(STDERR "\tloading $LADCPPROC/LADCPproc.defaults...\n");
+require "$LADCPPROC/LADCPproc.defaults";
+
+if (defined($opt_s)) {
+	print(STDERR "\tloading $opt_s...\n");
+	require $opt_s;
+}
+
+if ($LADCP{BLANKING_DISTANCE} == 0) {
+	print(STDERR "\t\tBLANKING_DISTANCE == 0 => excluding all data from bin 1\n")
+		if ($opt_d);
+	$wbin_start = 2 unless ($wbin_start > 2);
+	$ubin_start = 2 unless ($ubin_start > 2);
+	$shbin_start = 2 unless ($shbin_start > 2);
+}
+
+&antsAddParams('ADCP_orientation',
+		$dta->{ENSEMBLE}[0]->{XDUCER_FACING_UP} ? 'uplooker' : 'downlooker');
+
+$SHEAR_PREGRID_DZ = 20;
+$GRID_DZ = 5;
+
+my($year)  = substr($LADCP{ENSEMBLE}[0]->{DATE},6,4);
+my($month) = substr($LADCP{ENSEMBLE}[0]->{DATE},0,2);
+my($dau  ) = substr($LADCP{ENSEMBLE}[0]->{DATE},3,2);
+my($magdec,$maginc,$h_strength,$v_strength) = split('\s+',`magdec $lon $lat $year $month $day`);
+
+croak("$0: unknown magnetic declination\n")
+	unless defined($magdec);
+
+&antsAddParams('magnetic_declination',$magdec);
+
+#----------------------------------------------------------------------
+# Step 3: Pre-Process CTD & LADCP Data
+#----------------------------------------------------------------------
+
+printf(STDERR "Pre-processing data...");
+printf(STDERR "\n\tCTD...");
+
+#------------------------
+# clean CTD pressure data
+#------------------------
+my($pSpikes) = 0;
+for (my($r)=1; $r<$CTD_nrecs; $r++) {
+	$pSpikes++,$CTD_press[$r]=nan
+		if (abs($CTD_press[$r]-$CTD_press[$r-1])/$CTD_sampint > 2);
+}
+print(STDERR "\n\t\t$pSpikes pressure spikes removed")
+	if ($pSpikes>0 && $opt_d);
+
+#------------------------------------
+# calculate w and find deepest record
+#------------------------------------
+$CTD_maxpress = -9e99;
+for (my($r)=1; $r<$CTD_nrecs-1; $r++) {
+	$CTD_w[$r] = 0.99*($CTD_press[$r+1] - $CTD_press[$r-1]) / (2*$CTD_sampint);
+	if ($CTD_press[$r] > $CTD_maxpress) {
+		$CTD_maxpress = $CTD_press[$r];
+		$CTD_bottom = $r;
+    }										
+}
+print(STDERR "\n");
+
+#----------------------------------------------------------------------
+# Step 2b: Pre-Process LADCP Data
+#----------------------------------------------------------------------
+
+print(STDERR "\tLADCP...");
+
+#-------------------------------------------
+# transform to earth coordinates if required
+#-------------------------------------------
+
+$U = 0;		# velocity indices
+$V = 1;
+$W = 2;
+$E = 3;
+
+$LADCP{HEADING_BIAS} = -$magdec;
+
+if ($LADCP{BEAM_COORDINATES}) {
+	print(STDERR "\n\t\ttransforming beam to Earth coordinates...")
+		if ($opt_d);
+	for (my($ens)=0; $ens<=$#{$LADCP{ENSEMBLE}}; $ens++) {
+		$LADCP{ENSEMBLE}[$ens]->{TILT} = &angle_from_vertical($LADCP{ENSEMBLE}[$ens]->{PITCH},$LADCP{ENSEMBLE}[$ens]->{ROLL});
+		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+			@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]} =
+				velInstrumentToEarth(\%LADCP,$ens,velBeamToInstrument(\%LADCP,@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]}));
+			@{$LADCP{ENSEMBLE}[$ens]->{PERCENT_GOOD}[$bin]} =					# fake it to fool ref_lr_w
+				(0,0,0,defined($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]) ? 100 : 0);
+		}
+	}
+	$LADCP{BEAM_COORDINATES} = 0;
+	$LADCP{EARTH_COORDINATES} = 1;
+	unless ($opt_4) {
+		print(STDERR "\n\t\t\t3-beam solutions: $RDI_Coords::threeBeam_1 $RDI_Coords::threeBeam_2 $RDI_Coords::threeBeam_3 $RDI_Coords::threeBeam_4")
+			if ($opt_d);
+		&antsAddParams('3_beam_solutions',"$RDI_Coords::threeBeam_1 $RDI_Coords::threeBeam_2 $RDI_Coords::threeBeam_3 $RDI_Coords::threeBeam_4");
+	}
+} elsif ($LADCP{EARTH_COORDINATES}) {
+	printf(STDERR "\n\t\tcorrecting for magnetic declination of %.1f deg...",$magdec)
+		if ($opt_d);
+	for (my($ens)=0; $ens<=$#{$LADCP{ENSEMBLE}}; $ens++) {
+		$LADCP{ENSEMBLE}[$ens]->{TILT} = &angle_from_vertical($LADCP{ENSEMBLE}[$ens]->{PITCH},$LADCP{ENSEMBLE}[$ens]->{ROLL});
+		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+			@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]} =
+				velApplyHdgBias(\%LADCP,$ens,@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]});
+		}
+	}
+} else {
+	croak("$0: can only handle beam or earth coordinates\n")
+}
+
+print(STDERR "\n");
+
+#------------------------------------------------------
+# construct a depth-vs-time "profile" from the raw data
+#------------------------------------------------------
+
+print(STDERR "\t\tconstructing profile time series...")
+	if ($opt_d);
+	
+($LADCP_start,$LADCP_end,$LADCP_bottom,$w_gap_time,$zErr,$maxz) =
+    mk_prof(\%LADCP,0,undef,1,6,70,0.1,9999);
+croak("\n$LADCP_file: no good ensembles found\n")
+    unless defined($LADCP_start);
+
+if ($opt_d) {
+	printf(STDERR "\n\t\t\tStart of cast    : %s (#%5d) at %6.1fm\n",
+	                    $LADCP{ENSEMBLE}[$LADCP_start]->{TIME},
+	                    $LADCP{ENSEMBLE}[$LADCP_start]->{NUMBER},
+	                    $LADCP{ENSEMBLE}[$LADCP_start]->{DEPTH});
+	printf(STDERR "\t\t\tBottom of cast   : %s (#%5d) at %6.1fm\n",
+	                    $LADCP{ENSEMBLE}[$LADCP_bottom]->{TIME},
+	                    $LADCP{ENSEMBLE}[$LADCP_bottom]->{NUMBER},
+	                    $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH});
+	printf(STDERR "\t\t\tEnd of cast      : %s (#%5d) at %6.1fm",
+	                    $LADCP{ENSEMBLE}[$LADCP_end]->{TIME},
+	                    $LADCP{ENSEMBLE}[$LADCP_end]->{NUMBER},
+	                    $LADCP{ENSEMBLE}[$LADCP_end]->{DEPTH});
+}
+
+print(STDERR "\n");
+
+#----------------------------------------------------------------------
+# Step 4: Add CTD to LADCP Data & correct velocities for sound speed
+#	- {DEPTH} field is overwritten!
+#----------------------------------------------------------------------
+
+print(STDERR "Matching CTD to LADCP time series...");
+
+$opt_l = &lagLADCP2CTD()
+	unless defined($opt_l);
+
+print(STDERR "Associating CTD data with LADCP ensembles...");
+
+for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
+	my($r) = int(($LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME} - $opt_l) / $CTD_sampint);
+	if ($r < 0 && $ens == $LADCP_start) {
+		$r = int(($LADCP{ENSEMBLE}[++$ens]->{ELAPSED_TIME} - $opt_l) / $CTD_sampint)
+			while ($r < 0);
+		printf(STDERR "\n\tCTD data begin with instrument already in water => skipping %ds of LADCP data",
+			$LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME}-$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME});
+		$LADCP_start = $ens;
+	}
+	if ($r > $#CTD_press) {
+		printf(STDERR "\n\tCTD data end while instrument is still in water => truncating %ds of LADCP data",
+			$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME}-$LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME});
+		$LADCP_end = $ens - 1;
+		last;
+	}
+	my($dr);
+	for ($dr=0; !numberp($CTD_press[$r+$dr]); $dr--) {}
+	$LADCP{ENSEMBLE}[$ens]->{DEPTH} = depth($CTD_press[$r+$dr],$lat);
+	$LADCP{ENSEMBLE}[$ens]->{CTD_W} = $CTD_w[$r];
+	$LADCP{ENSEMBLE}[$ens]->{CTD_TEMP} = $CTD_temp[$r];
+	$LADCP{ENSEMBLE}[$ens]->{CTD_SVEL} = sVel($CTD_salin[$r],$CTD_temp[$r],$CTD_press[$r+$dr]);
+	my($sscorr) = $LADCP{ENSEMBLE}[$ens]->{CTD_SVEL} / $LADCP{ENSEMBLE}[$ens]->{SPEED_OF_SOUND};
+	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+		next unless defined($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]);
+		$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$U] *= $sscorr;
+		$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$V] *= $sscorr;
+		$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W] *= $sscorr;
+    }
+}
+
+&antsAddParams('bottom_depth',round($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}),
+			   'start_date',$LADCP{ENSEMBLE}[$LADCP_start]->{DATE},
+			   'start_time',$LADCP{ENSEMBLE}[$LADCP_start]->{TIME},
+			   'bottom_date',$LADCP{ENSEMBLE}[$LADCP_bottom]->{DATE},
+			   'bottom_time',$LADCP{ENSEMBLE}[$LADCP_bottom]->{TIME},
+			   'end_date',$LADCP{ENSEMBLE}[$LADCP_end]->{DATE},
+			   'end_time',$LADCP{ENSEMBLE}[$LADCP_end]->{TIME});
+
+print(STDERR "\n");
+
+#----------------------------------------------------------------------
+# Step  : Calculate Acoustic Backscatter Profile
+#----------------------------------------------------------------------
+
+print(STDERR "Finding seabed in acoustic backscatter profiles...");
+
+mk_backscatter_profs($LADCP_start,$LADCP_end);
+($water_depth,$sig_water_depth) =
+	find_backscatter_seabed($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH});
+
+$min_hab = $water_depth - $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH};
+printf(STDERR "\n\twater depth      = %d(+-%.1f)m",$water_depth,$sig_water_depth);
+printf(STDERR "\n\tclosest approach = %dmab",$min_hab);
+
+print(STDERR "\n");
+
+#----------------------------------------------------------------------
+# Step 5: Find Seabed
+#----------------------------------------------------------------------
+
+print(STDERR "Finding seabed in BT data...");
+
+($BT_water_depth,$sig_BT_water_depth) = 
+	find_seabed(\%LADCP,$LADCP_bottom,$LADCP{BEAM_COORDINATES});
+
+if (defined($BT_water_depth)) {
+	$min_hab = $BT_water_depth - $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH};
+	printf(STDERR "\n\twater depth      = %d(+-%.1f)m",$BT_water_depth,$sig_BT_water_depth);
+	printf(STDERR "\n\tclosest approach = %dmab",$min_hab);
+#	$water_depth = $BT_water_depth;									# assume BT data are better
+#	$sig_water_depth = $sig_BT_water_depth;							# (at least they are higher vertical resolution)
+}
+
+unless (defined($water_depth)) {
+	print(STDERR "\n\tno seabed found\n");
+	print(STDERR "\n\tunknown water depth => PPI editing disabled\n")
+		if ($opt_d);
+	$clip_margin = 0;
+}
+
+print(STDERR "\n");
+
+#----------------------------------------------------------------------
+# Step 6: Edit Data
+#----------------------------------------------------------------------
+
+print(STDERR "Calculating shear profiles...\n");
+
+$LADCP_start = 1 if ($LADCP_start == 0);							# ensure that there is previous ensemble
+
+print(STDERR "\tdowncast...");
+edit_velocity($LADCP_start,$LADCP_bottom);							# downcast
+calc_shear($LADCP_start,$LADCP_bottom,$SHEAR_PREGRID_DZ,0);			# pre-grid shear @SHEAR_PREGRID_DZm resolution
+calc_shear($LADCP_start,$LADCP_bottom,$GRID_DZ,1);					# calculate final gridded shear profile
+
+@dc_sh_n = @sh_n;													# save downcast results
+@dc_ush_mu = @ush_mu; @dc_ush_sig = @ush_sig;
+@dc_vsh_mu = @vsh_mu; @dc_vsh_sig = @vsh_sig;
+@dc_wsh_mu = @wsh_mu; @dc_wsh_sig = @wsh_sig;
+
+print(STDERR "\n\tupcast...");
+edit_velocity($LADCP_end,$LADCP_bottom);							# upcast
+calc_shear($LADCP_end,$LADCP_bottom,$SHEAR_PREGRID_DZ,0);
+calc_shear($LADCP_end,$LADCP_bottom,$GRID_DZ,1);
+
+print(STDERR "\n");
+
+#----------------------------------------------------------------------
+# Step 7: Get bottom track profile
+#----------------------------------------------------------------------
+
+print(STDERR "Getting BT profile...");
+getBTprof($LADCP_start,$LADCP_end);
+print(STDERR "\n");
+
+#----------------------------------------------------------------------
+# Step 8: Write Output
+#----------------------------------------------------------------------
+
+print(STDERR "Writing shear profiles...");
+
+@antsNewLayout = ('depth','dc_nshear','dc_u_z','dc_u_z.sig','dc_v_z','dc_v_z.sig','dc_w_z','dc_w_z.sig',
+						  'uc_nshear','uc_u_z','uc_u_z.sig','uc_v_z','uc_v_z.sig','uc_w_z','uc_w_z.sig');
+						  
+$commonParams = $antsCurParams;
+&antsAddParams('ubin_start',$ubin_start,'ubin_end',$ubin_end,		# record processing params
+			   'wbin_start',$wbin_start,'wbin_end',$wbin_end,
+			   'shbin_start',$shbin_start,'shbin_end',$shbin_end,
+			   'w_ref_bin',$w_ref_bin,'w_dif',$w_dif,
+			   'wake_hd_dif',$wake_hd_dif,'wake_ang_min',$wake_ang_min,
+			   'min_wake_w',$min_wake_w,'n_wake_bins',$n_wake_bins,
+			   'e_max',$e_max,'min_cor',$min_cor,
+			   'max_shdev',$max_shdev,'max_shdev_sum',$max_shdev_sum,
+			   'water_depth',round($water_depth),'water_depth.sig',round($sig_water_depth),
+			   'min_hab',round($min_hab),
+			   'clip_margin',$clip_margin,'first_clip_bin',$first_clip_bin);
+
+for (my($gi)=0; $gi<@ush_mu; $gi++) {
+	&antsOut(depthOfGI($gi),										# depth in center of bin
+			 $dc_sh_n[$gi],											# downcast
+			 $dc_ush_mu[$gi],$dc_ush_sig[$gi],
+			 $dc_vsh_mu[$gi],$dc_vsh_sig[$gi],
+			 $dc_wsh_mu[$gi],$dc_wsh_sig[$gi],
+			 $sh_n[$gi],											# upcast
+			 $ush_mu[$gi],$ush_sig[$gi],
+			 $vsh_mu[$gi],$vsh_sig[$gi],
+			 $wsh_mu[$gi],$wsh_sig[$gi]);
+}
+
+print(STDERR "\n");
+
+#----------------------------------------------------------------------
+
+if (defined($opt_a)) {
+	print(STDERR "Writing acoustic backscatter profiles...");
+
+	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+		my($fn) = sprintf("bin%02d.Sv",$bin);
+		print(STDERR " $fn");
+		
+		@antsNewLayout = ('depth','Sv');
+		&antsOut('EOF');
+		$antsCurParams = $commonParams;
+		close(STDOUT);
+		open(STDOUT,">$fn") || croak("$fn: $!\n");
+	    
+		for (my($gi)=0; $gi<@sSv; $gi++) {
+		    &antsOut(depthOfGI($gi),
+				     $nSv[$gi][$bin] ? $sSv[$gi][$bin]/ $nSv[$gi][$bin] : nan);
+	    }
+	}
+	print(STDERR "\n");
+}
+
+#----------------------------------------------------------------------
+
+if (defined($opt_t)) {
+	print(STDERR "Writing time series to $opt_t...");
+	
+	@antsNewLayout = ('ens','elapsed','depth','CTD_w','LADCP_w');
+	&antsOut('EOF');
+	$antsCurParams = $commonParams;
+	close(STDOUT);
+	open(STDOUT,">$opt_t") || croak("$opt_t: $!\n");
+	
+	for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
+		&antsOut($LADCP{ENSEMBLE}[$ens]->{NUMBER},
+				 $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME},
+				 $LADCP{ENSEMBLE}[$ens]->{DEPTH},
+				 $LADCP{ENSEMBLE}[$ens]->{CTD_W},
+				 $LADCP{ENSEMBLE}[$ens]->{W});
+	}
+	print(STDERR "\n");
+}
+
+#----------------------------------------------------------------------
+
+if (defined($opt_b)) {
+	print(STDERR "Writing bottom-track data to $opt_b...");
+	
+	@antsNewLayout = ('depth','u','v','w','u.sig','v.sig','w.sig','ndata');
+	&antsOut('EOF');
+	$antsCurParams = $commonParams;
+	close(STDOUT);
+	open(STDOUT,">$opt_b") || croak("$opt_b: $!\n");
+
+	my($skipped);
+	for (my($gi)=0; $gi<@BT_nsamp; $gi++) {
+		$skipped = 1 if ($BT_nsamp[$gi] > 0);
+		next unless ($skipped);
+		&antsOut(depthOfGI($gi),$BTu[$gi],$BTv[$gi],$BTw[$gi],$BTu_sig[$gi],$BTv_sig[$gi],$BTw_sig[$gi],$BT_nsamp[$gi]);
+	}
+	print(STDERR "\n");
+}
+
+#----------------------------------------------------------------------
+
+if (defined($opt_f)) {
+	print(STDERR "Writing data flags to $opt_f...");
+	
+	@antsNewLayout = ('ens');
+	for (my($i)=1; $i<=$LADCP{N_BINS}; $i++) {
+		$antsNewLayout[$i] = "bin$i";
+	}
+	&antsOut('EOF');
+	$antsCurParams = $commonParams;
+
+	close(STDOUT);
+	open(STDOUT,">$opt_f") || croak("$opt_f: $!\n");
+	
+	&antsPrintHeaders(STDOUT,@antsNewLayout);
+	for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
+		printf('%4d  ',$LADCP{ENSEMBLE}[$ens]->{NUMBER});
+		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+			printf("%02x ",$edit_flags[$ens][$bin]);
+		}
+		print($opt_R);
+	}
+	
+	print(STDERR "\n");
+}
+
+&antsExit();
+

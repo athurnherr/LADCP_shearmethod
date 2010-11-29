@@ -1,0 +1,167 @@
+#======================================================================
+#                    L A D C P P R O C . B T 
+#                    doc: Wed Oct 20 21:05:37 2010
+#                    dlm: Sun Oct 24 22:52:16 2010
+#                    (c) 2010 A.M. Thurnherr
+#                    uE-Info: 46 1 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#	Oct 20, 2010: - created
+
+my($BEAM1) = 0;
+my($BEAM2) = 1;
+my($BEAM3) = 2;
+my($BEAM4) = 3;
+
+my($nBTfound,$nBTdepthFlag,$nBTvalidVelFlag,$nBTwFlag) = (0,0,0,0);
+
+sub binBTprof($)
+{
+	my($ens) = @_;
+
+	my(@ea_max) = (0,0,0,0); my(@ea_max_bin) = (nan,nan,nan,nan);
+	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+		$ea_max[$BEAM1] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM1],
+		$ea_max_bin[$BEAM1] = $bin
+			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM1] > $ea_max[$BEAM1]);
+		$ea_max[$BEAM2] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM2],
+		$ea_max_bin[$BEAM2] = $bin
+			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM2] > $ea_max[$BEAM2]);
+		$ea_max[$BEAM3] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM3],
+		$ea_max_bin[$BEAM3] = $bin
+			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM3] > $ea_max[$BEAM3]);
+		$ea_max[$BEAM4] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM4],
+		$ea_max_bin[$BEAM4] = $bin
+			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM4] > $ea_max[$BEAM4]);
+	}
+
+#	print(STDERR "@ea_max | @ea_max_bin\n");
+
+	return unless (max(@ea_max_bin)-min(@ea_max_bin) <= 3);			# inconsistent range (&, impliclity, large tilt)
+		# SHOULD CONSIDER RELAXING LATER
+	$nBTfound++;
+
+	my($range_bin) = round(avg(@ea_max_bin));
+#	printf(STDERR "water_depth = $water_depth; BT peak depth = %d\n",depthOfBin($ens,$range_bin));
+	$nBTdepthFlag++,return											# BT range inconsistent with water depth
+		unless (abs($water_depth-depthOfBin($ens,$range_bin)) < 20+$sig_water_depth);
+
+	# try bin of max plus one above and below
+	# this does not really work because, often, only one of the bins has valid velocities
+	my($w1) = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$W];
+	my($w2) = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$W];
+	my($w3) = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$W];
+
+#	printf(STDERR "w123 = %.1f,%.1f,%.1f\n",$w1,$w2,$w3);
+
+	$w1 = 9e99 unless numberp($w1);									# no valid velocities
+	$w2 = 9e99 unless numberp($w1);
+	$w3 = 9e99 unless numberp($w1);
+
+	my($CTD_u,$CTD_v,$CTD_w);
+
+	if (abs($LADCP{ENSEMBLE}[$ens]->{W}-$w1) < abs($LADCP{ENSEMBLE}[$ens]->{W}-$w2) &&
+		abs($LADCP{ENSEMBLE}[$ens]->{W}-$w1) < abs($LADCP{ENSEMBLE}[$ens]->{W}-$w3)) {
+			$CTD_u = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$U];
+			$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$V];
+			$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$W];
+	} elsif (abs($LADCP{ENSEMBLE}[$ens]->{W}-$w1) < abs($LADCP{ENSEMBLE}[$ens]->{W}-$w2)) {
+			$CTD_u = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$U];
+			$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$V];
+			$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$W];
+	} else {
+			$nBTvalidVelFlag++,return if ($w2 == 9e99);				# none of 3 bins has valid velocity
+			$CTD_u = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$U];
+			$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$V];
+			$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$W];
+	}
+
+	$nBTwFlag++,return if (abs($CTD_w-$LADCP{ENSEMBLE}[$ens]->{W}) > 0.03);		# velocity error is too great
+
+#	printf(STDERR "good BT [%5.2f %5.2f %5.2f] found at ens $ens\n",$CTD_u,$CTD_v,$CTD_w);
+
+	if ($opt_o) {
+		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+			next if ($edit_flags[$ens][$bin]);
+			printf(BTF "%d %d %d %f %f %f %f %f %f %f %f %f %f %f\n",
+				$LADCP{ENSEMBLE}[$ens]->{NUMBER},
+				depthOfBin($ens,$bin),$LADCP{ENSEMBLE}[$ens]->{DEPTH},
+				$LADCP{ENSEMBLE}[$ens]->{PITCH},$LADCP{ENSEMBLE}[$ens]->{ROLL},
+				$CTD_u,$CTD_v,$CTD_w,
+				$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$U],
+				$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$V],
+				$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W],
+				$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$U]-$CTD_u,
+				$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$V]-$CTD_v,
+				$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]-$CTD_w);
+		}
+	    print(BTF "nan nan nan nan\n");
+	}
+
+	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+		next if ($edit_flags[$ens][$bin]);
+		my($gi) = depthOfBin($ens,$bin) / $GRID_DZ;
+		push(@{$BTu_vals[$gi]},$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$U]-$CTD_u);
+		push(@{$BTv_vals[$gi]},$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$V]-$CTD_v);
+		push(@{$BTw_vals[$gi]},$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]-$CTD_w);
+	}
+
+}
+
+sub getBTprof($$)
+{
+	my($LADCP_start,$LADCP_end) = @_;
+
+	if ($opt_o) {
+		open(BTF,">BT.profs");
+	    print(BTF "#ANTS#FIELDS# {ens} {depth} {CTD_depth} {pitch} {roll} {CTD_u} {CTD_v} {CTD_w} {u} {v} {w} {BT_u} {BT_v} {BT_w}\n");
+	}
+
+	for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
+		next unless ($water_depth-$LADCP{ENSEMBLE}[$ens]->{DEPTH} < 300);
+		binBTprof($ens);
+	}
+
+	if ($opt_d) {
+		print(STDERR "\n\t$nBTfound BT ensembles found\n");
+	    print(STDERR "\t\t$nBTdepthFlag flagged bad because of wrong bottom depth\n");
+	    print(STDERR "\t\t$nBTvalidVelFlag flagged bad because of no valid velocities\n");
+	    print(STDERR "\t\t$nBTwFlag flagged bad because of incorrect vertical velocity");
+	}
+
+	@BTu  = @BTv  = @BTw  = ();
+	@BTu_sig = @BTv_sig = @BTw_sig = ();
+	@BT_nsamp = ();
+
+	for (my($gi)=0; $gi<@BTu_vals; $gi++) {								# calc grid means & stddev
+		my($sum_u,$sum_v,$sum_w);
+
+		$BT_nsamp[$gi] = @{$BTu_vals[$gi]};
+		
+		for (my($vi)=0; $vi<$BT_nsamp[$gi]; $vi++) {
+			$sum_u += $BTu_vals[$gi][$vi];
+			$sum_v += $BTv_vals[$gi][$vi];
+			$sum_w += $BTw_vals[$gi][$vi];
+		}
+		$BTu[$gi] = $BT_nsamp[$gi] ? $sum_u/$BT_nsamp[$gi] : nan;
+		$BTv[$gi] = $BT_nsamp[$gi] ? $sum_v/$BT_nsamp[$gi] : nan;
+		$BTw[$gi] = $BT_nsamp[$gi] ? $sum_w/$BT_nsamp[$gi] : nan;
+	}
+
+	for (my($gi)=0; $gi<@BTu_vals; $gi++) {								# calc & grid stddevs
+		my($sumsq_u,$sumsq_v,$sumsq_w);
+		for (my($vi)=0; $vi<$BT_nsamp[$gi]; $vi++) {
+			$sumsq_u += ($BTu_vals[$gi][$vi] - $BTu[$gi])**2;
+			$sumsq_v += ($BTv_vals[$gi][$vi] - $BTv[$gi])**2;
+			$sumsq_w += ($BTw_vals[$gi][$vi] - $BTw[$gi])**2;
+		}
+		$BTu_sig[$gi] = $BT_nsamp[$gi]>1 ? sqrt($sumsq_u/($BT_nsamp[$gi]-1)) : nan;
+		$BTv_sig[$gi] = $BT_nsamp[$gi]>1 ? sqrt($sumsq_v/($BT_nsamp[$gi]-1)) : nan;
+		$BTw_sig[$gi] = $BT_nsamp[$gi]>1 ? sqrt($sumsq_w/($BT_nsamp[$gi]-1)) : nan;
+	}
+
+	close(BTF) if ($opt_o);
+}
+
+1;

@@ -1,0 +1,55 @@
+======================================================================
+                    T O D O 
+                    doc: Thu Oct 14 09:15:02 2010
+                    dlm: Mon Oct 25 21:50:35 2010
+                    (c) 2010 A.M. Thurnherr
+                    uE-Info: 30 13 NIL 0 0 72 3 2 4 NIL ofnI
+======================================================================
+
+=LADCPintsh=
+
+- determine what constitutes a gap
+- look into cross-gap shear integration
+
+
+=LADCPproc=
+
+- add warnings:
+	- wide band
+	- CTD_W_BIT (ambiguity velocity)
+	- bad time match
+	- seabed not found
+	- inconsistent water depth
+
+- add diagnostic plots
+
+- output shear vals to make histograms
+
+- try median instead of mean for shear binning
+
+- add pitch/roll to BT
+
+- check interaction between 3-beam solutions and correlation limit
+
+- implement TILT_BIT (others?)
+
+- calculate real acoustic backscatter profile
+
+- clean up LADCPproc.UHcode:
+	- remove weirdnesses
+	- avoid multiple calculation of &depthOfBin()
+	- improve "staging":
+		1) basic velocity editing (BADVEL, ERRVEL, CORREL) NB: before
+		   beam-to-Earth transformation!!!
+		2) ref-lr w (also handle W_BIT editing?)
+		3) integrate w to get z_approx
+		4) match LADCP to CTD time series
+		5) make accoustic backscatter profile
+		6) find seabed
+		7) sidelobe & PPI editing
+		8) ref-lr u,v,w
+		9) WAKE editing
+		10) SHEAR editing
+		11) ref-lr u,v,w
+	
+- re-add time-series calculation

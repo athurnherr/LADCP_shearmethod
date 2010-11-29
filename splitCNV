@@ -1,0 +1,48 @@
+#!/usr/bin/perl
+#======================================================================
+#                    S P L I T C N V 
+#                    doc: Mon Oct 25 22:24:21 2010
+#                    dlm: Fri Oct 29 20:04:42 2010
+#                    (c) 2010 A.M. Thurnherr
+#                    uE-Info: 16 29 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+# split SeaBird CNV file using scan values found with yoyo
+#	e.g. splitCNV P403_015_1sec.cnv `importCNV -s P403_015_1sec.cnv | yoyo -QFscan -ut`
+
+# HISTORY:
+#	Oct 25, 2010: - created
+#	Oct 26, 2010: - BUG: *.00 file always only contained the 1st record
+#	Oct 29, 2010: - cosmetics
+
+# scan number must be the first field of each record
+
+die("Usage: $0 <CNV-file> <val> [...]\n")
+	unless (@ARGV >= 2 && -f $ARGV[0]);
+
+chomp($basename = `basename $ARGV[0] .cnv`);
+
+$state = 0;								# init finite state machine
+$next = 0;								# next extension number
+$trg = 2;								# NB: yoyo -ut includes first & last scans
+
+open(IN,$ARGV[0]);
+while (<IN>) {
+	if ($state == 0) {					# state 0: reading header
+		push(@HDR,$_);
+		$state = 1 if /^\*END\*/;
+		next;
+	}
+	if ($state == 1) {					# state 1: begin new file
+		close(OUT);
+		printf(STDERR "writing $basename.%02d\n",$next);
+		open(OUT,sprintf(">$basename.%02d",$next++));
+		foreach my $h (@HDR) { print(OUT $h); }
+		$state = 2;
+	}
+	if ($state == 2) {					# state 2: copy data until target scan
+		print(OUT);
+		my(@f) = split;
+		$trg++,$state=1 if ($f[0] == $ARGV[$trg]);
+	}
+}

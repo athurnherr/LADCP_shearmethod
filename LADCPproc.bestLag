@@ -1,0 +1,145 @@
+#======================================================================
+#                    L A D C P P R O C . B E S T L A G 
+#                    doc: Tue Sep 28 21:58:48 2010
+#                    dlm: Tue Oct 26 13:37:19 2010
+#                    (c) 2010 A.M. Thurnherr
+#                    uE-Info: 58 94 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+# TODO:
+#	- first lag is always(?) nan unless CTD is turned on with LADCP in water
+
+sub interp_LADCP_w($$)
+{
+	my($elapsed,$ens) = @_;
+	my($sc) = ($elapsed - $LADCP{ENSEMBLE}[$ens-1]->{ELAPSED_TIME}) /
+			  ($LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME} -
+					$LADCP{ENSEMBLE}[$ens-1]->{ELAPSED_TIME});
+	unless (numberp($LADCP{ENSEMBLE}[$ens-1]->{W})) {
+		$nGaps++;
+		return $LADCP{ENSEMBLE}[$ens]->{W};
+	}
+	return $LADCP{ENSEMBLE}[$ens-1]->{W} +
+				$sc * ($LADCP{ENSEMBLE}[$ens]->{W} - $LADCP{ENSEMBLE}[$ens-1]->{W});
+}
+
+sub bestLag($)
+{
+	my($ws) = @_;														# window start index
+
+	my($best);
+	my($bestmad) = 9e99;												# mean absolute deviation
+	for (my($Llag)=-int($opt_w/2); $Llag<int($opt_w/2); $Llag++) {
+		my($sad) = my($nad) = 0;
+		for (my($Ci)=0; $Ci<$opt_w; $Ci++) {
+			my($Li) = $Ci + $Llag;
+			next if ($Li<0 || $Li>=$opt_w);
+			next unless numberp($CTD_w[$ws+$Ci]) && numberp($LADCP_w[$ws+$Li]);
+			$sad += abs($CTD_w[$ws+$Ci] - $LADCP_w[$ws+$Li]);
+			$nad++;
+		}
+		next unless ($nad > 0);
+		if ($sad/$nad < $bestmad) {
+			$best = $Llag;
+			$bestmad = $sad/$nad;
+		}
+	}
+	return $best;	
+}
+
+sub lagLADCP2CTD()
+{
+	#------------------------------------------------------------------------
+	# find 1st rec & ensemble >=80% down to max depth & make 1st guess at lag
+	#------------------------------------------------------------------------
+	
+	my($CTD_80pct_down) = 0;
+	$CTD_80pct_down++											# "until" formulation allows for missing pressures
+		until ($CTD_press[$CTD_80pct_down]-$CTD_press[0] >= 0.8*($CTD_maxpress-$CTD_press[0]));
+	
+	my($LADCP_80pct_down) = 0;
+	$LADCP_80pct_down++
+		while ($LADCP{ENSEMBLE}[$LADCP_80pct_down]->{DEPTH} < 0.8*$LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH});
+	
+	
+	my($first_guess_lag) = $LADCP{ENSEMBLE}[$LADCP_80pct_down]->{ELAPSED_TIME} -
+						   $CTD_80pct_down*$CTD_sampint;
+	
+	printf(STDERR "\n\t1st guess offset [CTD pressure, LADCP estimated depth] = %ds [%ddbar, %dm]\n",
+			$first_guess_lag*$CTD_sampint,$CTD_press[$CTD_80pct_down],$LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH})
+				if ($opt_d);
+	croak("\n$0: cannot determine valid 1st guess offset ($LADCP_80pct_down,$CTD_80pct_down,$CTD_press[$CTD_80pct_down])\n")
+		if ($first_guess_lag*$CTD_sampint > 1200);
+	
+	#------------------------------------------------------------------------------------
+	# Linearly interpolate LADCP time series onto a new grid with $CTD_sampint resolution
+	#	ALSO: apply first_guess_lag to make lags small, which keeps the bestlag data
+	#		  chunks large
+	#------------------------------------------------------------------------------------
+	
+	$nGaps = 0;
+	
+	for (my($ens)=$LADCP_start,my($r)=0; $ens<=$LADCP_end; $ens++) {
+		while ($r*$CTD_sampint < $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME}) {
+			$LADCP_w[$r-$first_guess_lag] = interp_LADCP_w($r*$CTD_sampint,$ens)
+				unless ($first_guess_lag > $r);
+			$r++;
+		}
+	}
+	
+	print(STDERR "\t$nGaps gaps in w timeseries")
+		if ($opt_d);
+	
+	print(STDERR "\n");
+
+	#----------------------------------------------------------------------
+	# Calculate lags
+	#----------------------------------------------------------------------
+
+	printf(STDERR "\tcalculating $opt_n lags from %ds-long windows [s]: ",$opt_w);
+	$opt_w = int($opt_w / $CTD_sampint);
+
+	#---------------------------------------------------------------
+	# carry out opt_n lag correlations and keep tally of the results
+	#---------------------------------------------------------------
+	my(%nBest);
+	my($nLags) = 0;
+	my($lags) = '';
+	for (my($window)=0; $window<$opt_n; $window++) {
+		my($ws) = $window * int(@LADCP_w/$opt_n);			# window start
+		$ws = @LADCP_w-$opt_w if ($ws+$opt_w >= @LADCP_w);
+	
+		$bestLag = bestLag($ws);
+		if (defined($bestLag)) {
+			printf(STDERR "%d ",$bestLag*$CTD_sampint);
+			$lags .= sprintf(" %s",$bestLag*$CTD_sampint);
+			$nBest{$bestLag}++;
+			$nLags++;
+		} else {
+			printf(STDERR "nan ");
+		}
+	}
+    &antsAddParams('time_lags',$lags);
+	
+	#----------------------
+	# find most popular lag
+    #----------------------
+	my($best_lag);
+	foreach my $i (keys(%nBest)) {
+		$best_lag = $i if ($nBest{$i} > $nBest{$best_lag});
+	}
+	croak("\n$0: cannot determine a valid lag\n")
+		unless ($nBest{$best_lag} > 1);
+	print(STDERR "\n\n\t\tWARNING: only $nBest{$best_lag} of the lag estimates agree!\n")
+		if ($nBest{$best_lag} < $opt_n/2);
+
+	if ($nBest{$best_lag} == $nLags) {
+		printf(STDERR "\n\t\tunanimous lag = %ds\n",$best_lag*$CTD_sampint);
+	} else {
+		printf(STDERR "\n\t\tmost popular lag = %ds\n",$best_lag*$CTD_sampint);
+	}
+
+	return ($first_guess_lag + $best_lag) * $CTD_sampint;
+}
+
+1;
