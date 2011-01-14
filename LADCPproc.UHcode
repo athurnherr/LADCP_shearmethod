@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . U H C O D E 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Tue Oct 26 14:40:39 2010
+#                    dlm: Mon Jan 10 13:23:13 2011
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 431 79 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 295 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from Eric's [merge.c]; with mods
@@ -31,6 +31,7 @@
 #	Oct 19, 2010: - reversed semantics of -p
 #	Oct 25, 2010: - added W_CTD_BIT, renamed W_BIT to W_OUTLIER_BIT
 #	Oct 26, 2010: - added TILT_BIT
+#	Dec 10, 2010: - modified assertion to allow processing of UL data
 
 #======================================================================
 # VELOCITY EDITING
@@ -291,8 +292,11 @@ sub uv_to_shear($)
 	for (my($i)=0; $i<@sh_i1; $i++) {								# calc and bin shears
 		my($d0) = &depthOfBin($ens,$sh_i0[$i]);
 		my($d1) = &depthOfBin($ens,$sh_i1[$i]);
-		die("$0: assertion failed (ens=$ens i=$i sh_i0[$i]=$sh_i0[$i] sh_i1[$i]=$sh_i1[$i] d0=$d0 d1=$d1)") unless ($d0>=0 && $d1>=0);
-		die("$0: assertion failed (ens=$ens i=$i sh_i0[$i]=$sh_i0[$i] sh_i1[$i]=$sh_i1[$i] d0=$d0 d1=$d1)") unless ($d1-$d0 > 0);
+		die("$0: assertion failed (ens=$ens i=$i depth=$LADCP{ENSEMBLE}[$ens]->{DEPTH} sh_i0[$i]=$sh_i0[$i] sh_i1[$i]=$sh_i1[$i] d0=$d0 d1=$d1)")
+			unless ($d0>=0 && $d1>=0);
+		die("$0: assertion failed (ens=$ens i=$i sh_i0[$i]=$sh_i0[$i] sh_i1[$i]=$sh_i1[$i] d0=$d0 d1=$d1)")
+			unless (($LADCP{ENSEMBLE}[$ens]->{XDUCER_FACING_DOWN} && $d1-$d0>0) ||
+					($LADCP{ENSEMBLE}[$ens]->{XDUCER_FACING_UP}   && $d1-$d0<0));
 		$dsh[$i] = ($d1 + $d0) / 2;
 		$ush[$i] = ($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$sh_i1[$i]][$U] -
 					$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$sh_i0[$i]][$U]) / ($d1-$d0);

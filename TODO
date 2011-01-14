@@ -1,9 +1,9 @@
 ======================================================================
                     T O D O 
                     doc: Thu Oct 14 09:15:02 2010
-                    dlm: Mon Oct 25 21:50:35 2010
+                    dlm: Mon Jan 10 13:29:13 2011
                     (c) 2010 A.M. Thurnherr
-                    uE-Info: 30 13 NIL 0 0 72 3 2 4 NIL ofnI
+                    uE-Info: 17 51 NIL 0 0 72 3 2 4 NIL ofnI
 ======================================================================
 
 =LADCPintsh=
@@ -13,6 +13,8 @@
 
 
 =LADCPproc=
+
+- allow setting of GRID_DZ (-o) in ProcessingParams
 
 - add warnings:
 	- wide band

@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Tue Oct 26 14:18:20 2010
+#                    dlm: Thu Dec  9 19:40:05 2010
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 182 36 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 40 31 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [mkShearProf]
@@ -19,6 +19,33 @@
 
 # HISTORY:
 #	Sep 17, 2010: - created
+#	Dec  9, 2010: - added doc for ASCII CTD file support
+
+#----------------------------------------------------------------------
+# ASCII CTD file support
+#----------------------------------------------------------------------
+
+# By default, [LADCPproc] reads a standard seabird .cnv file. Alternatively,
+# the CTD data can be supplied in a plain ASCII file. To do so, the following
+# variables must be defined in the setup file (-s). Each variable defines 
+# the field (column) number of the corresponding data field. Fields are
+# numbered beginning with 1.
+
+# $CTD_ASCII_sampfreq		= 1;  ## in Hz
+
+# $CTD_ASCII_press_field 	= 1;
+# $CTD_ASCII_temp_field 	= 2;
+# $CTD_ASCII_salin_field	= 3;
+# $CTD_ASCII_lat_field 		= 4;
+# $CTD_ASCII_lon_field 		= 5;
+
+# The following variable is optional.
+
+# $CTD_ASCII_badval 		= 999;
+
+#----------------------------------------------------------------------
+# Shear Processing Parameters
+#----------------------------------------------------------------------
 
 ##   u_bin0, u_bin1, w_bin0, w_bin1: These set the first and
 ##      last bin indices used when integrating horizontal and

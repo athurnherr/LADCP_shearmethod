@@ -1,13 +1,14 @@
 #======================================================================
 #                    L A D C P P R O C . B T 
 #                    doc: Wed Oct 20 21:05:37 2010
-#                    dlm: Sun Oct 24 22:52:16 2010
+#                    dlm: Mon Jan 10 12:07:17 2011
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 46 1 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 11 28 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
 #	Oct 20, 2010: - created
+#	Jan 10, 2010: - -o => -k
 
 my($BEAM1) = 0;
 my($BEAM2) = 1;
@@ -81,7 +82,7 @@ sub binBTprof($)
 
 #	printf(STDERR "good BT [%5.2f %5.2f %5.2f] found at ens $ens\n",$CTD_u,$CTD_v,$CTD_w);
 
-	if ($opt_o) {
+	if ($opt_k) {
 		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
 			next if ($edit_flags[$ens][$bin]);
 			printf(BTF "%d %d %d %f %f %f %f %f %f %f %f %f %f %f\n",
@@ -113,7 +114,7 @@ sub getBTprof($$)
 {
 	my($LADCP_start,$LADCP_end) = @_;
 
-	if ($opt_o) {
+	if ($opt_k) {
 		open(BTF,">BT.profs");
 	    print(BTF "#ANTS#FIELDS# {ens} {depth} {CTD_depth} {pitch} {roll} {CTD_u} {CTD_v} {CTD_w} {u} {v} {w} {BT_u} {BT_v} {BT_w}\n");
 	}
@@ -161,7 +162,7 @@ sub getBTprof($$)
 		$BTw_sig[$gi] = $BT_nsamp[$gi]>1 ? sqrt($sumsq_w/($BT_nsamp[$gi]-1)) : nan;
 	}
 
-	close(BTF) if ($opt_o);
+	close(BTF) if ($opt_k);
 }
 
 1;

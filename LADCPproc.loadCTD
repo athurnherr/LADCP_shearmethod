@@ -1,0 +1,180 @@
+#======================================================================
+#                    L A D C P P R O C . L O A D C T D 
+#                    doc: Thu Dec  9 18:39:01 2010
+#                    dlm: Mon Jan 10 12:13:54 2011
+#                    (c) 2010 A.M. Thurnherr
+#                    uE-Info: 31 30 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#	Dec  9, 2010: - exported from LADCPproc
+#				  - added support for ASCII files
+#	Dec 16, 2010: - BUG cnv read did not work any more
+#	Jan 10, 2010: - added code to skip ANTS header
+
+sub readCTD_ASCII($$)
+{
+	my($fn,$dtaR) = @_;
+
+	croak("$fn: unknown pressure field\n")    unless defined($CTD_ASCII_press_field);
+	croak("$fn: unknown temperature field\n") unless defined($CTD_ASCII_temp_field);
+	croak("$fn: unknown salinity field\n")    unless defined($CTD_ASCII_salin_field);
+	croak("$fn: unknown latitude field\n")    unless defined($CTD_ASCII_lat_field);
+	croak("$fn: unknown longitude field\n")   unless defined($CTD_ASCII_lon_field);
+
+	$CTD_ASCII_badval = 9e99 unless defined($CTD_ASCII_badval);
+
+	open(F,$fn) || croak("$fn: $!\n");
+	my($sumLat,$sumLon); my($nPos) = 0;
+	my($ds);
+	while (chomp($ds = <F>)) {
+		next if ($ds =~ /^#/);
+		my(@rec) = split('\s+',$ds);
+		push(@{$dtaR->{press}},($rec[$CTD_ASCII_press_field-1] == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_press_field-1]);
+		push(@{$dtaR->{temp}}, ($rec[$CTD_ASCII_temp_field-1]  == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_temp_field-1]);
+		push(@{$dtaR->{salin}},($rec[$CTD_ASCII_salin_field-1] == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_salin_field-1]);
+		unless ($rec[$CTD_ASCII_lat_field-1] == $CTD_ASCII_badval) {
+			$nPos++;
+			$sumLat += $rec[$CTD_ASCII_lat_field-1];
+			$sumLon += $rec[$CTD_ASCII_lon_field-1];
+		}
+	}
+	close(F);
+	
+	if ($nPos > 0) {
+		$dtaR->{lat} = $sumLat / $nPos;
+		$dtaR->{lon} = $sumLon / $nPos;
+	}
+
+	$dtaR->{sampint} = 1 / $CTD_ASCII_sampfreq;
+}
+
+sub readCTD_CNV($$)
+{
+	my($fn,$dtaR) = @_;
+	my($CTD_nrecs,$CTD_nfields,$pressF,$tempF,$salinF);
+	my($CTD_badval,$CTD_file_type);
+
+	open(F,$fn) || croak("$fn: $!\n");
+	while (1) { 														# parse header
+		my($hdr);
+		chomp($hdr = <F>);
+		$hdr =~ s/\r*$//;
+		croak("$0: unexpected EOF (format error)\n") unless defined($hdr);
+		last if ($hdr eq '*END*');
+	    
+		$CTD_nfields = $',next if ($hdr =~ /nquan = /); 				# Layout
+		$CTD_nrecs = $',next if ($hdr =~ /nvalues = /);
+		$pressF = $1,next if ($hdr =~ /name (\d+) = prDM:/);
+		if ($opt_2) {
+			$tempF	= $1,next if ($hdr =~ /name (\d+) = t190C:/);
+			$salinF = $1,next if ($hdr =~ /name (\d+) = sal11:/);
+		} else {
+			$tempF	= $1,next if ($hdr =~ /name (\d+) = t090C:/);
+			$salinF = $1,next if ($hdr =~ /name (\d+) = sal00:/);
+		}
+	
+		&antsAddParams('start_time',$1),next							# selected metadata
+			if ($hdr =~ /start_time = (.*)/);
+	
+		&antsAddParams('station',$1),next
+			if ($hdr =~ /Station\s*:\s*(.*)/);
+		&antsAddParams('ship',$1),next
+			if ($hdr =~ /Ship\s*:\s*(.*)\s*$/);
+		&antsAddParams('cruise',$1),next
+			if ($hdr =~ /Cruise\s*:\s*(.*)\s*$/);
+		&antsAddParams('time',$1),next
+			if ($hdr =~ /Time\s*:\s*(.*)/);
+		&antsAddParams('date',$1),next
+			if ($hdr =~ /Date\s*:\s*(.*)/);
+	
+		if ($hdr =~ /Latitude\s*[=:]\s*/) {
+			($deg,$min,$NS) = split(/ /,$');
+			$dtaR->{lat} = $deg + $min/60;
+			$dtaR->{lat} *= -1 if ($NS eq 'S');
+			next;
+		}
+		if ($hdr =~ /Longitude\s*[=:]\s*/) {
+			($deg,$min,$EW) = split(/ /,$');
+			$dtaR->{lon} = $deg + $min/60;
+			$dtaR->{lon} *= -1 if ($EW eq 'W');
+			next;
+		}
+	    
+		if ($hdr =~ /interval = seconds: /) {
+			$dtaR->{sampint} = 1*$';
+			next;
+		}
+	    
+		$CTD_badval = $',next
+			if ($hdr =~ /bad_flag = /); 
+		$CTD_file_type = $',next
+			if ($hdr =~ /file_type = /);    
+	}
+	
+	croak("$CTD_file: cannot determine CTD file layout\n")
+		unless ($CTD_nfields && $CTD_nrecs);
+	croak("$CTD_file: cannot determine missing value\n")
+		unless defined($CTD_badval);
+	croak("$CTD_file: not a CTD time series file\n")
+		unless ($dtaR->{sampint});
+	croak("$CTD_file: no pressure field\n")
+		unless defined($pressF);
+	croak("$CTD_file: no suitable temperature field\n")
+		unless defined($tempF);
+	croak("$CTD_file: no suitable salinity field\n")
+		unless defined($salinF);
+	
+	if ($CTD_file_type eq 'ascii') {
+		while (1) {
+			last unless (my(@rec) = &antsFileIn(F));
+			push(@{$dtaR->{press}},($rec[$pressF] == $CTD_badval) ? nan : $rec[$pressF]);
+			push(@{$dtaR->{temp}}, ($rec[$tempF]  == $CTD_badval) ? nan : $rec[$tempF]);
+			push(@{$dtaR->{salin}},($rec[$salinF] == $CTD_badval) ? nan : $rec[$salinF]);
+		}
+	} elsif ($CTD_file_type eq 'binary') {
+	
+		my($fbits) = 8 * length(pack('f',0));
+		croak(sprintf("$0: incompatible native CPU float representation (%d instead of 32bits)\n",fbits))
+			unless ($fbits == 32);  
+		    
+		croak("$fn: can't read binary data\n")
+			unless (read(F,my($dta),4*$CTD_nfields*$CTD_nrecs) == 4*$CTD_nfields*$CTD_nrecs);
+		print(STDERR "$fn: WARNING: extraneous data at EOF\n") unless eof(F);
+	
+		$dta = pack('V*',unpack('N*',$dta)) 			# big-endian CPU
+			if (unpack('h*', pack('s', 1)) =~ /01/);	# c.f. perlport(1)
+	    
+		my(@dta) = unpack("f*",$dta);
+	
+		for (my($r)=0; $r<$CTD_nrecs; $r++) {
+			push(@{$dtaR->{press}},($dta[$r*$CTD_nfields+$pressF] == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$pressF]);
+			push(@{$dtaR->{temp}}, ($dta[$r*$CTD_nfields+$tempF]  == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$tempF]);
+			push(@{$dtaR->{salin}},($dta[$r*$CTD_nfields+$salinF] == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$salinF]);
+		}
+	} else {
+		croak("$fn: unknown CTD file type $CTD_file_type\n");
+	}
+	close(F);
+}
+
+sub readCTD($$)
+{
+	my($fn,$dtaR) = @_;
+
+	if (defined($CTD_ASCII_sampfreq)) {
+		readCTD_ASCII($fn,$dtaR);
+	} else {
+		readCTD_CNV($fn,$dtaR);
+	}
+
+	croak("$0: unknown latitude\n") unless defined($dtaR->{lat});
+	&antsAddParams('lat',$dtaR->{lat});
+	croak("$0: unknown longitude\n") unless defined($dtaR->{lon});
+	&antsAddParams('lon',$dtaR->{lon});
+
+	&antsAddParams('CTD_sampfreq',1/$dtaR->{sampint});
+	&antsAddParams('ITS',$P{ITS} = 90);
+}
+
+1;

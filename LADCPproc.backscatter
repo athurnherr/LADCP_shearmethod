@@ -1,10 +1,15 @@
 #======================================================================
 #                    L A D C P P R O C . B A C K S C A T T E R 
 #                    doc: Wed Oct 20 13:02:27 2010
-#                    dlm: Wed Oct 20 14:26:43 2010
+#                    dlm: Fri Dec 10 00:35:45 2010
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 105 44 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 12 52 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
+
+# HISTORY:
+#	Oct 20, 2010: - created
+#	Dec 10, 2010: - BUG: backscatter above sea surface made code bomb
+#						 when run with uplooker data
 
 #----------------------------------------------------------------------
 # Volume Scattering Coefficient, following Deines (IEEE 1999)
@@ -60,6 +65,7 @@ sub mk_backscatter_profs($$)
 	for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
 		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
 			my($gi) = int(&depthOfBin($ens,$bin) / $GRID_DZ);
+			next if ($gi < 0);
 			my($range_to_bin) = &dzToBin($ens,$bin) / cos(rad($LADCP{BEAM_ANGLE}));
 			$sSv[$gi][$bin] += Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
 								  $LADCP{TRANSMITTED_PULSE_LENGTH},
