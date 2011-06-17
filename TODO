@@ -1,9 +1,9 @@
 ======================================================================
                     T O D O 
                     doc: Thu Oct 14 09:15:02 2010
-                    dlm: Mon Jan 10 13:29:13 2011
+                    dlm: Wed Jun 15 15:16:20 2011
                     (c) 2010 A.M. Thurnherr
-                    uE-Info: 17 51 NIL 0 0 72 3 2 4 NIL ofnI
+                    uE-Info: 40 0 NIL 0 0 72 3 2 4 NIL ofnI
 ======================================================================
 
 =LADCPintsh=
@@ -36,6 +36,7 @@
 - implement TILT_BIT (others?)
 
 - calculate real acoustic backscatter profile
+	- currently, profiles are arbitarily calculated from bins 3-9
 
 - clean up LADCPproc.UHcode:
 	- remove weirdnesses

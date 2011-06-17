@@ -1,15 +1,17 @@
 #======================================================================
 #                    L A D C P P R O C . B A C K S C A T T E R 
 #                    doc: Wed Oct 20 13:02:27 2010
-#                    dlm: Fri Dec 10 00:35:45 2010
+#                    dlm: Wed Jun 15 15:31:43 2011
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 12 52 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 67 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
 #	Oct 20, 2010: - created
 #	Dec 10, 2010: - BUG: backscatter above sea surface made code bomb
 #						 when run with uplooker data
+#	Jun 15, 2011: - added calculation of backscatter profiles from
+#				    subset of bins
 
 #----------------------------------------------------------------------
 # Volume Scattering Coefficient, following Deines (IEEE 1999)
@@ -67,23 +69,30 @@ sub mk_backscatter_profs($$)
 			my($gi) = int(&depthOfBin($ens,$bin) / $GRID_DZ);
 			next if ($gi < 0);
 			my($range_to_bin) = &dzToBin($ens,$bin) / cos(rad($LADCP{BEAM_ANGLE}));
-			$sSv[$gi][$bin] += Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-								  $LADCP{TRANSMITTED_PULSE_LENGTH},
-								  $Er[0],$range_to_bin,
-								  $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][0])/4 +
-							   Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-								  $LADCP{TRANSMITTED_PULSE_LENGTH},
-								  $Er[1],$range_to_bin,
-								  $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][1])/4 +
-							   Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-								  $LADCP{TRANSMITTED_PULSE_LENGTH},
-								  $Er[2],$range_to_bin,
-								  $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][2])/4 +
-							   Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-								  $LADCP{TRANSMITTED_PULSE_LENGTH},
-								  $Er[3],$range_to_bin,
-								  $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][3])/4;
+			my($Sv) = Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+						 $LADCP{TRANSMITTED_PULSE_LENGTH},
+						 $Er[0],$range_to_bin,
+						 $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][0])/4 +
+					  Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+						 $LADCP{TRANSMITTED_PULSE_LENGTH},
+						 $Er[1],$range_to_bin,
+						 $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][1])/4 +
+					  Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+						 $LADCP{TRANSMITTED_PULSE_LENGTH},
+						 $Er[2],$range_to_bin,
+						 $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][2])/4 +
+					  Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+						 $LADCP{TRANSMITTED_PULSE_LENGTH},
+						 $Er[3],$range_to_bin,
+                         $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][3])/4;
+
+			$sSv[$gi][$bin] += $Sv;
 			$nSv[$gi][$bin]++;
+
+			if ($bin>=$Svbin_start && $bin<=$Svbin_end) {
+				$sSv_prof[$gi] += $Sv;
+				$nSv_prof[$gi]++;
+			}
 		}
 	}
 }

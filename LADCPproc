@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Mon Jan 10 13:53:54 2011
+#                    dlm: Wed Jun 15 15:47:25 2011
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 382 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 479 55 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'process LADCP data to get shear, time series';
@@ -32,8 +32,11 @@ $antsSummary = 'process LADCP data to get shear, time series';
 #	Dec 10, 2010: - change -w) default to 120s
 #				  - changed nshear output to 0 from nan when there are no samples
 #	Dec 27, 2010: - changed sign of -l to accept lag output from [LADCP_w]
-#	Jan 10, 2010: - -o => -k added new -o
+#	Jan 10, 2011: - -o => -k added new -o
 #				  - added code to fill CTD sound vel gaps
+#	Jan 22, 2011: - added -g) lat,lon
+#				  - added -c)ompass corr
+#	Jun 15, 2011: - added mean backscatter profile to default output
 
 ($ANTS) 	  = (`which list` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -52,17 +55,18 @@ require "$PERL_TOOLS/RDI_Coords.pl";
 require "$PERL_TOOLS/RDI_Utils.pl";
 
 $antsParseHeader = 0;
-&antsUsage('24ab:df:i:kl:n:o:ps:t:w:',2,
+&antsUsage('24ab:c:df:g:i:kl:n:o:ps:t:w:',2,
 	'[use -2)dary CTD sensor pair]',
 	'[require -4)-beam LADCP solutions]',
-	'[-s)etup <file>]',
+	'[-s)etup <file>] [-g)ps <lat,lon>]',
+	'[-c)ompass-corr <offset,cos-fac,sin-fac>]',
 	'[enable -p)PI editing]',
 	'[-o)utput grid <resolution[5m]>]',
 	'[-i)nitial LADCP time lag <guestimate>]',
 	'[-l)ag LADCP <by>] [auto-lag -w)indow <size[120s]>] [-n) <auto-lag windows[20]]',
 	'[-d)iagnostic output]',
 	'output: [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
-	'        [-a)coustic backscatter profiles] [bottom-trac-k) profs]',
+	'        [per-bin -a)coustic backscatter profiles] [bottom-trac-k) profs]',
 	'<RDI file> <SeaBird file>');
 
 $RDI_Coords::minValidVels = 4 if ($opt_4);
@@ -77,6 +81,19 @@ $RDI_Coords::minValidVels = 4 if ($opt_4);
 &antsFileOpt($opt_s);
 &antsFloatOpt($opt_i);
 &antsCardOpt($opt_o);
+
+if (defined($opt_g)) {
+	($CTD{lat},$CTD{lon}) = split(',',$opt_g);
+	croak("$0: cannot decode -g $opt_g\n")
+		unless numberp($CTD{lat}) && numberp($CTD{lon});
+}
+
+if (defined($opt_c)) {
+	($CC_offset,$CC_cos_fac,$CC_sin_fac) = split(',',$opt_c);
+	croak("$0: cannot decode -c $opt_c\n")
+		unless numberp($CC_offset) && numberp($CC_cos_fac) && numberp($CC_sin_fac);
+}
+	
 
 $LADCP_file = &antsFileArg();
 $CTD_file 	= &antsFileArg();
@@ -209,10 +226,18 @@ if ($LADCP{BEAM_COORDINATES}) {
 		&antsAddParams('3_beam_solutions',"$RDI_Coords::threeBeam_1 $RDI_Coords::threeBeam_2 $RDI_Coords::threeBeam_3 $RDI_Coords::threeBeam_4");
 	}
 } elsif ($LADCP{EARTH_COORDINATES}) {
-	printf(STDERR "\n\t\tcorrecting for magnetic declination of %.1f deg...\n",$magdec)
-		if ($opt_d);
+	if ($opt_d) {
+		if ($opt_c) {
+			printf(STDERR "\n\t\tcalculating tilt and correcting for compass error and magnetic declination of %.1f deg...\n",$magdec);
+		} else {
+			printf(STDERR "\n\t\tcalculating tilt and correcting for magnetic declination of %.1f deg...\n",$magdec);
+		}
+	}
 	for (my($ens)=0; $ens<=$#{$LADCP{ENSEMBLE}}; $ens++) {
 		$LADCP{ENSEMBLE}[$ens]->{TILT} = &angle_from_vertical($LADCP{ENSEMBLE}[$ens]->{PITCH},$LADCP{ENSEMBLE}[$ens]->{ROLL});
+		my($hdg) = rad($LADCP{ENSEMBLE}[$ens]->{HEADING});
+		$LADCP{HEADING_BIAS} = ($CC_offset + $CC_cos_fac*cos($hdg) + $CC_sin_fac*sin($hdg)) - $magdec
+			if ($opt_c);
 		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
 			@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]} =
 				velApplyHdgBias(\%LADCP,$ens,@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]});
@@ -421,7 +446,7 @@ print(STDERR "Writing shear profiles...");
 
 @antsNewLayout = ('depth','dc_nshear','dc_u_z','dc_u_z.sig','dc_v_z','dc_v_z.sig','dc_w_z','dc_w_z.sig',
 						  'uc_nshear','uc_u_z','uc_u_z.sig','uc_v_z','uc_v_z.sig','uc_w_z','uc_w_z.sig',
-						  'nshear','u_z','u_z.sig','v_z','v_z.sig','w_z','w_z.sig');
+						  'nshear','u_z','u_z.sig','v_z','v_z.sig','w_z','w_z.sig','Sv','Sv.n');
 						  
 $commonParams = $antsCurParams;
 &antsAddParams('ubin_start',$ubin_start,'ubin_end',$ubin_end,		# record processing params
@@ -434,7 +459,8 @@ $commonParams = $antsCurParams;
 			   'max_shdev',$max_shdev,'max_shdev_sum',$max_shdev_sum,
 			   'water_depth',round($water_depth),'water_depth.sig',round($sig_water_depth),
 			   'min_hab',round($min_hab),
-			   'clip_margin',$clip_margin,'first_clip_bin',$first_clip_bin);
+			   'clip_margin',$clip_margin,'first_clip_bin',$first_clip_bin,
+			   'Svbin_start',$Svbin_start,'Svbin_end',$Svbin_end);
 
 for (my($gi)=0; $gi<@ush_mu; $gi++) {
 	&antsOut(depthOfGI($gi),										# depth in center of bin
@@ -446,10 +472,12 @@ for (my($gi)=0; $gi<@ush_mu; $gi++) {
 			 $uc_ush_mu[$gi],$uc_ush_sig[$gi],
 			 $uc_vsh_mu[$gi],$uc_vsh_sig[$gi],
 			 $uc_wsh_mu[$gi],$uc_wsh_sig[$gi],
-			 $sh_n[$gi],
+			 $sh_n[$gi],											# combined
 			 $ush_mu[$gi],$ush_sig[$gi],
 			 $vsh_mu[$gi],$vsh_sig[$gi],
 			 $wsh_mu[$gi],$wsh_sig[$gi],
+			 $nSv_prof[$gi]?$sSv_prof[$gi]/$nSv_prof[$gi]:nan,
+			 $nSv_prof[$gi],
 	);
 }
 
@@ -458,7 +486,7 @@ print(STDERR "\n");
 #----------------------------------------------------------------------
 
 if (defined($opt_a)) {
-	print(STDERR "Writing acoustic backscatter profiles...");
+	print(STDERR "Writing per-bin acoustic backscatter profiles...");
 
 	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
 		my($fn) = sprintf("bin%02d.Sv",$bin);

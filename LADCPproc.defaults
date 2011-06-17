@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Thu Dec  9 19:40:05 2010
+#                    dlm: Wed Jun 15 15:15:41 2011
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 40 31 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 23 48 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [mkShearProf]
@@ -20,6 +20,7 @@
 # HISTORY:
 #	Sep 17, 2010: - created
 #	Dec  9, 2010: - added doc for ASCII CTD file support
+#	Jun 15, 2011: - added Svbin_start, Svbin_end
 
 #----------------------------------------------------------------------
 # ASCII CTD file support
@@ -42,6 +43,23 @@
 # The following variable is optional.
 
 # $CTD_ASCII_badval 		= 999;
+
+#----------------------------------------------------------------------
+# Backscatter Profile Parameters
+#----------------------------------------------------------------------
+
+# The output profile of volume-scattering coefficient is calculated 
+# from a subset of the bins only. This is based on the observation,
+# from on a single P403 profile, that the volume-scattering coefficient 
+# correction of Deines (IEEE 1999) yield similar results only for
+# bins 3-9. 
+
+# The seabed-finding routine, on the other hand, uses acoustic 
+# backscatter from all bins, as it is possible that the seabed is only
+# seen in the farthest bins. 
+
+$Svbin_start = 3;
+$Svbin_end	 = 9; 
 
 #----------------------------------------------------------------------
 # Shear Processing Parameters

@@ -1,16 +1,17 @@
 #======================================================================
 #                    L A D C P P R O C . L O A D C T D 
 #                    doc: Thu Dec  9 18:39:01 2010
-#                    dlm: Mon Jan 10 12:13:54 2011
+#                    dlm: Sat Jan 22 21:40:12 2011
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 31 30 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 174 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
 #	Dec  9, 2010: - exported from LADCPproc
 #				  - added support for ASCII files
 #	Dec 16, 2010: - BUG cnv read did not work any more
-#	Jan 10, 2010: - added code to skip ANTS header
+#	Jan 10, 2011: - added code to skip ANTS header
+#	Jan 22, 2011: - adapted to new -g
 
 sub readCTD_ASCII($$)
 {
@@ -19,8 +20,10 @@ sub readCTD_ASCII($$)
 	croak("$fn: unknown pressure field\n")    unless defined($CTD_ASCII_press_field);
 	croak("$fn: unknown temperature field\n") unless defined($CTD_ASCII_temp_field);
 	croak("$fn: unknown salinity field\n")    unless defined($CTD_ASCII_salin_field);
-	croak("$fn: unknown latitude field\n")    unless defined($CTD_ASCII_lat_field);
-	croak("$fn: unknown longitude field\n")   unless defined($CTD_ASCII_lon_field);
+	unless (numberp($dtaR->{lat})) {
+		croak("$fn: unknown latitude field\n")    unless defined($CTD_ASCII_lat_field);
+		croak("$fn: unknown longitude field\n")   unless defined($CTD_ASCII_lon_field);
+	}
 
 	$CTD_ASCII_badval = 9e99 unless defined($CTD_ASCII_badval);
 
@@ -33,7 +36,7 @@ sub readCTD_ASCII($$)
 		push(@{$dtaR->{press}},($rec[$CTD_ASCII_press_field-1] == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_press_field-1]);
 		push(@{$dtaR->{temp}}, ($rec[$CTD_ASCII_temp_field-1]  == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_temp_field-1]);
 		push(@{$dtaR->{salin}},($rec[$CTD_ASCII_salin_field-1] == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_salin_field-1]);
-		unless ($rec[$CTD_ASCII_lat_field-1] == $CTD_ASCII_badval) {
+		unless (!defined($CTD_ASCII_lat_field) || $rec[$CTD_ASCII_lat_field-1] == $CTD_ASCII_badval) {
 			$nPos++;
 			$sumLat += $rec[$CTD_ASCII_lat_field-1];
 			$sumLon += $rec[$CTD_ASCII_lon_field-1];
