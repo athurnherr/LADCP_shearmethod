@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B E S T L A G 
 #                    doc: Tue Sep 28 21:58:48 2010
-#                    dlm: Wed Jan  5 19:44:09 2011
+#                    dlm: Fri Jul  8 02:54:29 2011
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 67 28 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 55 101 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # TODO:
@@ -16,6 +16,8 @@
 #	Jan  5, 2011: - changed first guess from 80% down to 10% down
 #				  - added LADCP time lag to %PARAMs
 #				  - added support of -i
+#	Jul  7, 2011: - added code to remove window-mean of w before lagging to
+#				    make it work in regions of crazy ocean w (IWISE 16007)
 
 sub interp_LADCP_w($$)
 {
@@ -38,15 +40,26 @@ sub bestLag($)
 	my($best);
 	my($bestmad) = 9e99;												# mean absolute deviation
 	for (my($Llag)=-int($opt_w/2); $Llag<int($opt_w/2); $Llag++) {
-		my($sad) = my($nad) = 0;
+		my($mCw,$mLw,$nw) = (0,0,0);									# first calc means
 		for (my($Ci)=0; $Ci<$opt_w; $Ci++) {
 			my($Li) = $Ci + $Llag;
 			next if ($Li<0 || $Li>=$opt_w);
 			next unless numberp($CTD{w}[$ws+$Ci]) && numberp($LADCP_w[$ws+$Li]);
-			$sad += abs($CTD{w}[$ws+$Ci] - $LADCP_w[$ws+$Li]);
+			$mCw += $CTD{w}[$ws+$Ci];
+			$mLw += $LADCP_w[$ws+$Li];
+			$nw++;
+		}
+		next unless ($nw > 0);
+		$mCw /= $nw; $mLw /= $nw;
+		
+		my($sad) = my($nad) = 0;										# calc mad with means removed
+		for (my($Ci)=0; $Ci<$opt_w; $Ci++) {
+			my($Li) = $Ci + $Llag;
+			next if ($Li<0 || $Li>=$opt_w);
+			next unless numberp($CTD{w}[$ws+$Ci]) && numberp($LADCP_w[$ws+$Li]);
+			$sad += abs($CTD{w}[$ws+$Ci]-$mCw - ($LADCP_w[$ws+$Li]-$mLw));
 			$nad++;
 		}
-		next unless ($nad > 0);
 		if ($sad/$nad < $bestmad) {
 			$best = $Llag;
 			$bestmad = $sad/$nad;

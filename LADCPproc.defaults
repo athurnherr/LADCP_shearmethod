@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Wed Jun 15 15:15:41 2011
+#                    dlm: Fri Jul  8 00:06:07 2011
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 23 48 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 91 16 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [mkShearProf]
@@ -15,12 +15,14 @@
 #	- the default version in the ANTS bin dir is always loaded
 #	- if there is a version in the current processing directory it is loaded 
 #	  afterwards
-# 	- for additional notes, see [mkShearProf]
+#	- per-station parameters can be chosed based on $LADCP_file and $CTD_file
+# 	- for additional notes, see [LADCPproc]
 
 # HISTORY:
 #	Sep 17, 2010: - created
 #	Dec  9, 2010: - added doc for ASCII CTD file support
 #	Jun 15, 2011: - added Svbin_start, Svbin_end
+#	Jul  7, 2011: - added BT processing parameters
 
 #----------------------------------------------------------------------
 # ASCII CTD file support
@@ -60,6 +62,48 @@
 
 $Svbin_start = 3;
 $Svbin_end	 = 9; 
+
+#----------------------------------------------------------------------
+# Bottom Track Parameters
+#----------------------------------------------------------------------
+
+# First bin to consider when looking for seabed to calculated post-
+# processed BT. NB: For consistency with EF's code, bin 1 is the 
+# first bin.
+
+$BT_bin_start = 1;
+
+# CTD depth above seabed where BT search begins
+
+$BT_begin_search_above = 300;
+
+# Maximum allowed spread of bin number where max echo is found. Large values
+# imply sloping seabed and/or large instrument tilt. The default value of
+# 3 is probably too tight. The range spread calculation should be modified
+# to take instrument tilt into consideration.
+
+$BT_max_bin_spread = 3;
+
+# For tricky BT cases, the acoustic backscatter from the seabed can be plotted
+# and the bottom range set manually. This has been found to be very powerful
+# in case of 2011_IWISE yoyo profile 160, where the bottom was around 150m 
+# from the lower turning points and where the method of Deines [1999] clearly
+# does not work.
+
+#$BT_min_depth = xxx;
+#$BT_max_depht = xxx;
+
+# Maximum difference between water depth and average distance of echo max.,
+# if $BT_min_depth and $BT_max_depth are not set. The stddev of the detected
+# water depth is added To this number.
+
+$BT_max_depth_error = 20;
+
+# Maximum allowed difference between reference-layer w and BT w. Note 
+# that this must be relaxed in regions of significant near-bottom
+# vertical velocity, e.g. due to cross-slope currents.
+
+$BT_max_w_difference = 0.03;
 
 #----------------------------------------------------------------------
 # Shear Processing Parameters

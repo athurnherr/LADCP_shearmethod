@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B A C K S C A T T E R 
 #                    doc: Wed Oct 20 13:02:27 2010
-#                    dlm: Wed Jun 15 15:31:43 2011
+#                    dlm: Thu Jul  7 08:55:45 2011
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 67 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 96 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -12,6 +12,13 @@
 #						 when run with uplooker data
 #	Jun 15, 2011: - added calculation of backscatter profiles from
 #				    subset of bins
+#	Jul  7, 2011: - use $BEAM? vars to clarify code
+#				  - save SV values to use in BT code
+
+my($BEAM1) = 0;
+my($BEAM2) = 1;
+my($BEAM3) = 2;
+my($BEAM4) = 3;
 
 #----------------------------------------------------------------------
 # Volume Scattering Coefficient, following Deines (IEEE 1999)
@@ -53,14 +60,14 @@ sub mk_backscatter_profs($$)
 	
 	my(@Er) = (1e99,1e99,1e99,1e99);						# echo intensity reference level
 	for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
-		$Er[0] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][0]
-			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][0] < $Er[0]);
-		$Er[1] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][1]
-			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][1] < $Er[1]);
-		$Er[2] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][2]
-			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][2] < $Er[2]);
-		$Er[3] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][3]
-			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][3] < $Er[3]);
+		$Er[$BEAM1] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][$BEAM1]
+			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][$BEAM1] < $Er[$BEAM1]);
+		$Er[$BEAM2] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][$BEAM2]
+			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][$BEAM2] < $Er[$BEAM2]);
+		$Er[$BEAM3] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][$BEAM3]
+			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][$BEAM3] < $Er[$BEAM3]);
+		$Er[$BEAM4] = $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][$BEAM4]
+			if ($LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$LADCP{N_BINS}-1][$BEAM4] < $Er[$BEAM4]);
     }
 	print(STDERR "\n\t\@per-beam noise levels = @Er") if ($opt_d);
 
@@ -69,22 +76,23 @@ sub mk_backscatter_profs($$)
 			my($gi) = int(&depthOfBin($ens,$bin) / $GRID_DZ);
 			next if ($gi < 0);
 			my($range_to_bin) = &dzToBin($ens,$bin) / cos(rad($LADCP{BEAM_ANGLE}));
-			my($Sv) = Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-						 $LADCP{TRANSMITTED_PULSE_LENGTH},
-						 $Er[0],$range_to_bin,
-						 $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][0])/4 +
-					  Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-						 $LADCP{TRANSMITTED_PULSE_LENGTH},
-						 $Er[1],$range_to_bin,
-						 $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][1])/4 +
-					  Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-						 $LADCP{TRANSMITTED_PULSE_LENGTH},
-						 $Er[2],$range_to_bin,
-						 $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][2])/4 +
-					  Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-						 $LADCP{TRANSMITTED_PULSE_LENGTH},
-						 $Er[3],$range_to_bin,
-                         $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][3])/4;
+			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM1] = Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
+														    $Er[$BEAM1],$range_to_bin,
+							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM1]);
+			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM2] = Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
+														    $Er[$BEAM2],$range_to_bin,
+							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM2]);
+			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM3] = Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
+														    $Er[$BEAM3],$range_to_bin,
+							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM3]);
+			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM4] = Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
+														    $Er[$BEAM4],$range_to_bin,
+							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM4]);
+			my($Sv) = avg(@{$LADCP{ENSEMBLE}[$ens]->{SV}[$bin]});
 
 			$sSv[$gi][$bin] += $Sv;
 			$nSv[$gi][$bin]++;

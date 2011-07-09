@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Wed Feb 16 15:13:46 2011
+#                    dlm: Thu Jul  7 06:30:50 2011
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 401 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 32 28 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -29,20 +29,25 @@ $antsSummary = 'integrate LADCP shear';
 #					samples (i.e. primarily when chosing a small -r)
 #	Dec  9, 2010: - allowed for empty BT file
 #	Feb 16, 2011: - BUG: gaps in shear data were not handled correctly in baroclinic solution
+#	Jul  7, 2011: - added -m
 
 ($ANTS) = (`which list` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
 require "$ANTS/libstats.pl";
 
-&antsUsage('b:dr:s:w:u:',0,
+&antsUsage('b:dm:r:s:w:u:',0,
 	'[-d)ebug]',
-	'[reference with -b)ottom-track <file>]',
+	'[reference with -b)ottom-track <file> [-m)in BT samp[10]]]',
 	'[-u)plooker <file>]',
 	'[min -r)aw <shear samp[10]>] [min -s)moothed <shear samp[20]>]',
 	'[-w)eighted avg <below[1200]>]',
 	'[LADCP shear file]');
 
+croak("$0: -m requires -b\n")
+	if defined($opt_m) && !defined($opt_b);
+
 &antsCardOpt(\$opt_r,10);	## minimum number of samples for shear
+&antsCardOpt(\$opt_m,10);	# minimum number of samples for BT data
 &antsCardOpt(\$opt_s,20);	## minimum number of samples for smoothed shear
 &antsCardOpt(\$opt_w,1200);	## probably 1200 for midlatitude-equatorial, 2400 for high lat
 
@@ -311,7 +316,7 @@ if (defined($opt_b)) {											# reference to bottom-track profile
 
 	while (my(@BTr) = &antsFileIn(BTF)) {
 		my($gi) = int($BTr[$BTdF] / $DZ);
-		next unless ($BTr[$BTndF] >= $opt_r);
+		next unless ($BTr[$BTndF] >= $opt_m);
 		$BT_nsamp[$gi] = $BTr[$BTndF];
 		$BT_u[$gi] = $BTr[$BTuF];
 		$BT_v[$gi] = $BTr[$BTvF];

@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Wed Jun 15 15:47:25 2011
+#                    dlm: Fri Jul  8 03:33:21 2011
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 479 55 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 491 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'process LADCP data to get shear, time series';
@@ -37,6 +37,11 @@ $antsSummary = 'process LADCP data to get shear, time series';
 #	Jan 22, 2011: - added -g) lat,lon
 #				  - added -c)ompass corr
 #	Jun 15, 2011: - added mean backscatter profile to default output
+#	Jul  7, 2011: - added support for $BT_* processing parameters
+#				  - replaced old per-bin acoustic backscatter profile output by
+#					acoustic backscatter depth-time-series
+#				  - disabled seabed and acoustic backscatter code when not required (e.g. UL)
+#				  - made non-diagnostic output terser
 
 ($ANTS) 	  = (`which list` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -55,7 +60,7 @@ require "$PERL_TOOLS/RDI_Coords.pl";
 require "$PERL_TOOLS/RDI_Utils.pl";
 
 $antsParseHeader = 0;
-&antsUsage('24ab:c:df:g:i:kl:n:o:ps:t:w:',2,
+&antsUsage('24a:b:c:df:g:i:kl:n:o:ps:t:w:',2,
 	'[use -2)dary CTD sensor pair]',
 	'[require -4)-beam LADCP solutions]',
 	'[-s)etup <file>] [-g)ps <lat,lon>]',
@@ -66,7 +71,7 @@ $antsParseHeader = 0;
 	'[-l)ag LADCP <by>] [auto-lag -w)indow <size[120s]>] [-n) <auto-lag windows[20]]',
 	'[-d)iagnostic output]',
 	'output: [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
-	'        [per-bin -a)coustic backscatter profiles] [bottom-trac-k) profs]',
+	'        [-a)coustic backscatter <depth-time-series file] [bottom-trac-k) profs]',
 	'<RDI file> <SeaBird file>');
 
 $RDI_Coords::minValidVels = 4 if ($opt_4);
@@ -107,7 +112,8 @@ $CTD_file 	= &antsFileArg();
 
 print(STDERR "Reading LADCP data ($LADCP_file)...");
 readData($LADCP_file,\%LADCP);
-printf(STDERR "\n\t%d ensembles\n",scalar(@{$LADCP{ENSEMBLE}}));
+printf(STDERR "\n\t%d ensembles",scalar(@{$LADCP{ENSEMBLE}})) if ($opt_d);
+print(STDERR "\n");
 
 #----------------------------------------------------------------------
 # Step 2: Set Processing Parameters
@@ -129,10 +135,11 @@ if ($LADCP{BLANKING_DISTANCE} == 0) {
 	$wbin_start = 2 unless ($wbin_start > 2);
 	$ubin_start = 2 unless ($ubin_start > 2);
 	$shbin_start = 2 unless ($shbin_start > 2);
+	$BT_bin_start = 2 unless ($BT_bin_start > 2);
 }
 
 &antsAddParams('ADCP_orientation',
-		$dta->{ENSEMBLE}[0]->{XDUCER_FACING_UP} ? 'uplooker' : 'downlooker');
+		$LADCP{ENSEMBLE}[0]->{XDUCER_FACING_UP} ? 'uplooker' : 'downlooker');
 
 $SHEAR_PREGRID_DZ = 20;
 $GRID_DZ = defined($opt_o) ? $opt_o : 5;
@@ -153,14 +160,15 @@ croak("$0: unknown magnetic declination\n")
 
 print(STDERR "Reading CTD data ($CTD_file)...");
 readCTD($CTD_file,\%CTD);
-printf(STDERR "\n\t%d scans\n",scalar(@{$CTD{press}}));
+printf(STDERR "\n\t%d scans",scalar(@{$CTD{press}})) if ($opt_d);
+print(STDERR "\n");
 
 #----------------------------------------------------------------------
 # Step 4: Pre-Process CTD & LADCP Data
 #----------------------------------------------------------------------
 
 printf(STDERR "Pre-processing data...");
-printf(STDERR "\n\tCTD...");
+printf(STDERR "\n\tCTD...") if ($opt_d);
 
 #------------------------
 # clean CTD pressure data
@@ -187,13 +195,11 @@ for (my($r)=1; $r<@{$CTD{press}}-1; $r++) {
 printf(STDERR "\n\t\tmax pressure [%ddbar] at scan#%d",$CTD{maxpress},$CTD{atbottom})
 	if $opt_d;
 
-print(STDERR "\n");
-
 #----------------------------------------------------------------------
 # Step 4b: Pre-Process LADCP Data
 #----------------------------------------------------------------------
 
-print(STDERR "\tLADCP...");
+print(STDERR "\n\tLADCP...") if ($opt_d);
 
 #-------------------------------------------
 # transform to earth coordinates if required
@@ -287,8 +293,8 @@ $opt_l = defined($opt_l) ? -$opt_l : &lagLADCP2CTD();
 
 print(STDERR "Associating CTD data with LADCP ensembles...");
 
-for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
-	my($lastSvel);
+for (my($min_depth)=9e99,my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
+	my($lastSvel); 
 	my($r) = int(($LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME} - $opt_l) / $CTD{sampint});
 	if ($r < 0 && $ens == $LADCP_start) {
 		$r = int(($LADCP{ENSEMBLE}[++$ens]->{ELAPSED_TIME} - $opt_l) / $CTD{sampint})
@@ -299,13 +305,18 @@ for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
 	}
 	if ($r > $#{$CTD{press}}) {
 		printf(STDERR "\n\tCTD data end while instrument is still in water => truncating %ds of LADCP data",
-			$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME}-$LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME});
+			$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME}-$LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME})
+				if ($opt_d);
 		$LADCP_end = $ens - 1;
 		last;
 	}
 	my($dr);
 	for ($dr=0; !numberp($CTD{press}[$r+$dr]); $dr--) {}
 	$LADCP{ENSEMBLE}[$ens]->{DEPTH} = depth($CTD{press}[$r+$dr],$CTD{lat});
+	if ($LADCP{ENSEMBLE}[$ens]->{DEPTH} < $min_depth) {
+		$min_depth = $LADCP{ENSEMBLE}[$ens]->{DEPTH};
+		$LADCP_top = $ens;
+	}
 	$LADCP{ENSEMBLE}[$ens]->{CTD_W} = $CTD{w}[$r];
 	$LADCP{ENSEMBLE}[$ens]->{CTD_TEMP} = $CTD{temp}[$r];
 	$LADCP{ENSEMBLE}[$ens]->{CTD_SVEL} = sVel($CTD{salin}[$r],$CTD{temp}[$r],$CTD{press}[$r+$dr]);
@@ -323,7 +334,8 @@ for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
     }
 }
 
-&antsAddParams('bottom_depth',round($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}),
+&antsAddParams('top_depth',,round($LADCP{ENSEMBLE}[$LADCP_top]->{DEPTH}),
+			   'bottom_depth',round($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}),
 			   'start_date',$LADCP{ENSEMBLE}[$LADCP_start]->{DATE},
 			   'start_time',$LADCP{ENSEMBLE}[$LADCP_start]->{TIME},
 			   'bottom_date',$LADCP{ENSEMBLE}[$LADCP_bottom]->{DATE},
@@ -337,53 +349,62 @@ print(STDERR "\n");
 # Step 6: Calculate Acoustic Backscatter Profile
 #----------------------------------------------------------------------
 
-print(STDERR "Finding seabed in acoustic backscatter profiles...");
-
+print(STDERR "Calculating acoustic backscatter profiles...");
 mk_backscatter_profs($LADCP_start,$LADCP_end);
-($water_depth,$sig_water_depth) =
-	find_backscatter_seabed($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH});
-
-$min_hab = $water_depth - $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH};
-printf(STDERR "\n\twater depth      = %d(+-%.1f)m",$water_depth,$sig_water_depth);
-printf(STDERR "\n\tclosest approach = %dmab",$min_hab);
-
 print(STDERR "\n");
 
 #----------------------------------------------------------------------
 # Step 7: Find Seabed
 #----------------------------------------------------------------------
 
-print(STDERR "Finding seabed in BT data...");
+if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
 
-($BT_water_depth,$sig_BT_water_depth) = 
-	find_seabed(\%LADCP,$LADCP_bottom,$LADCP{BEAM_COORDINATES});
+	print(STDERR "Finding seabed...");
 
-if (defined($BT_water_depth)) {
-	$min_hab = $BT_water_depth - $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH};
-	printf(STDERR "\n\twater depth      = %d(+-%.1f)m",$BT_water_depth,$sig_BT_water_depth);
+	print(STDERR "\n\tin acoustic backscatter profiles...") if ($opt_d);
+	($water_depth,$sig_water_depth) =
+		find_backscatter_seabed($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH});
+	
+	$min_hab = $water_depth - $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH};
+	printf(STDERR "\n\twater depth      = %d(+-%.1f)m",$water_depth,$sig_water_depth);
 	printf(STDERR "\n\tclosest approach = %dmab",$min_hab);
-#	$water_depth = $BT_water_depth;									# assume BT data are better
-#	$sig_water_depth = $sig_BT_water_depth;							# (at least they are higher vertical resolution)
-}
-
-unless (defined($water_depth)) {
-	print(STDERR "\n\tno seabed found\n");
-	print(STDERR "\n\tunknown water depth => PPI editing disabled\n")
+	
+	print(STDERR "\n\tin RDI BT data...") if ($opt_d);
+	($BT_water_depth,$sig_BT_water_depth) = 
+		find_seabed(\%LADCP,$LADCP_bottom,$LADCP{BEAM_COORDINATES});
+	
+	if (defined($BT_water_depth)) {
+		$min_hab = $BT_water_depth - $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH};
+		printf(STDERR "\n\twater depth      = %d(+-%.1f)m",$BT_water_depth,$sig_BT_water_depth);
+		printf(STDERR "\n\tclosest approach = %dmab",$min_hab);
+#		$water_depth = $BT_water_depth; 							# assume BT data are better
+#		$sig_water_depth = $sig_BT_water_depth; 					# (at least they are higher vertical resolution)
+	}
+	
+	unless (defined($water_depth)) {
+		print(STDERR "\n\tno seabed found\n");
+		print(STDERR "\n\tunknown water depth => PPI editing disabled\n")
+			if ($opt_d);
+		$clip_margin = 0;
+	}
+	
+	print(STDERR "\n");
+	
+} else { # UPLOOKER
+	$water_depth = $sig_water_depth = $min_hab = nan;
+	print(STDERR "Uplooker data => PPI editing disabled\n")
 		if ($opt_d);
-	$clip_margin = 0;
 }
-
-print(STDERR "\n");
 
 #----------------------------------------------------------------------
 # Step 8: Edit Data
 #----------------------------------------------------------------------
 
-print(STDERR "Calculating shear profiles...\n");
+print(STDERR "Calculating shear profiles...");
 
 $LADCP_start = 1 if ($LADCP_start == 0);							# ensure that there is previous ensemble
 
-print(STDERR "\tdowncast...");
+print(STDERR "\n\tdowncast...") if ($opt_d);
 edit_velocity($LADCP_start,$LADCP_bottom);							# downcast
 calc_shear($LADCP_start,$LADCP_bottom,$SHEAR_PREGRID_DZ,0);			# pre-grid shear @SHEAR_PREGRID_DZm resolution
 calc_shear($LADCP_start,$LADCP_bottom,$GRID_DZ,1);					# calculate final gridded shear profile
@@ -393,7 +414,7 @@ calc_shear($LADCP_start,$LADCP_bottom,$GRID_DZ,1);					# calculate final gridded
 @dc_vsh_mu = @vsh_mu; @dc_vsh_sig = @vsh_sig;
 @dc_wsh_mu = @wsh_mu; @dc_wsh_sig = @wsh_sig;
 
-print(STDERR "\n\tupcast...");
+print(STDERR "\n\tupcast...") if ($opt_d);
 edit_velocity($LADCP_end,$LADCP_bottom);							# upcast
 calc_shear($LADCP_end,$LADCP_bottom,$SHEAR_PREGRID_DZ,0);
 calc_shear($LADCP_end,$LADCP_bottom,$GRID_DZ,1);
@@ -403,7 +424,7 @@ calc_shear($LADCP_end,$LADCP_bottom,$GRID_DZ,1);
 @uc_vsh_mu = @vsh_mu; @uc_vsh_sig = @vsh_sig;
 @uc_wsh_mu = @wsh_mu; @uc_wsh_sig = @wsh_sig;
 
-print(STDERR "\n\tcombined...");
+print(STDERR "\n\tcombined...") if ($opt_d);
 for (my($gi)=0; $gi<@dc_ush_mu; $gi++) {
 	if ($dc_sh_n[$gi]>0 && $uc_sh_n[$gi]>0) {
 		$sh_n[$gi] = $dc_sh_n[$gi] + $uc_sh_n[$gi];
@@ -434,12 +455,14 @@ print(STDERR "\n");
 # Step 9: Get bottom track profile
 #----------------------------------------------------------------------
 
-print(STDERR "Getting BT profile...");
-getBTprof($LADCP_start,$LADCP_end);
-print(STDERR "\n");
+if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
+	print(STDERR "Getting BT profile...");
+	getBTprof($LADCP_start,$LADCP_end);
+	print(STDERR "\n");
+}
 
 #----------------------------------------------------------------------
-# Step 10: Write Output
+# Step 10: Write Output Files
 #----------------------------------------------------------------------
 
 print(STDERR "Writing shear profiles...");
@@ -460,7 +483,15 @@ $commonParams = $antsCurParams;
 			   'water_depth',round($water_depth),'water_depth.sig',round($sig_water_depth),
 			   'min_hab',round($min_hab),
 			   'clip_margin',$clip_margin,'first_clip_bin',$first_clip_bin,
-			   'Svbin_start',$Svbin_start,'Svbin_end',$Svbin_end);
+			   'Svbin_start',$Svbin_start,'Svbin_end',$Svbin_end,
+			   'BT_bin_start',$BT_bin_start,'BT_bin_search_above',$BT_bin_search_above,
+			   'BT_max_bin_spread',$BT_max_bin_spread,'BT_max_w_difference',$BT_max_w_difference,
+);
+if (defined($BT_min_depth)) {
+	&antsAddParams('BT_min_depth',$BT_min_depth,'BT_max_depth',$BT_max_depth);
+} else {
+	&antsAddParams('BT_max_depth_error',$BT_max_depth_error);
+}
 
 for (my($gi)=0; $gi<@ush_mu; $gi++) {
 	&antsOut(depthOfGI($gi),										# depth in center of bin
@@ -483,33 +514,49 @@ for (my($gi)=0; $gi<@ush_mu; $gi++) {
 
 print(STDERR "\n");
 
-#----------------------------------------------------------------------
+#---------------------------------------
+# Acoustic backscatter depth-time-series
+#---------------------------------------
 
 if (defined($opt_a)) {
-	print(STDERR "Writing per-bin acoustic backscatter profiles...");
+	print(STDERR "Writing acoustic backscatter depth-time-series to <$opt_a>...");
 
-	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
-		my($fn) = sprintf("bin%02d.Sv",$bin);
-		print(STDERR " $fn");
-		
-		@antsNewLayout = ('depth','Sv');
-		&antsOut('EOF');
-		$antsCurParams = $commonParams;
-		close(STDOUT);
-		open(STDOUT,">$fn") || croak("$fn: $!\n");
-	    
-		for (my($gi)=0; $gi<@sSv; $gi++) {
-		    &antsOut(depthOfGI($gi),
-				     $nSv[$gi][$bin] ? $sSv[$gi][$bin]/ $nSv[$gi][$bin] : nan);
-	    }
+	
+	@antsNewLayout = ('ens','elapsed','CTD_depth','depth','bin','downcast',
+					  'Sv_beam1','Sv_beam2','Sv_beam3','Sv_beam4','Sv.median');
+	&antsOut('EOF');
+    close(STDOUT);
+	open(STDOUT,">$opt_a") || croak("$opt_a: $!\n");
+
+	$antsCurParams = $commonParams;
+	&antsAddParams('min_elapsed',$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME},
+				   'max_elapsed',$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME},
+				   'min_depth',$LADCP{ENSEMBLE}[$LADCP_top]->{XDUCER_FACING_UP} ?
+	   					&depthOfBin($LADCP_top,$LADCP{N_BINS}-1) : $LADCP{ENSEMBLE}[$LADCP_top]->{DEPTH},
+				   'max_depth',$LADCP{ENSEMBLE}[$LADCP_bottom]->{XDUCER_FACING_UP} ?
+	   					$LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH} : &depthOfBin($LADCP_bottom,$LADCP{N_BINS}-1)
+	);
+
+	for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
+		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+			&antsOut($LADCP{ENSEMBLE}[$ens]->{NUMBER},
+					 $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME},
+					 $LADCP{ENSEMBLE}[$ens]->{DEPTH},
+					 &depthOfBin($ens,$bin),$bin,
+					 ($ens <= $LADCP_bottom) ? 1 : 0,
+					 @{$LADCP{ENSEMBLE}[$ens]->{SV}[$bin]},
+					 median(@{$LADCP{ENSEMBLE}[$ens]->{SV}[$bin]})
+			);
+		}	 
 	}
+
 	print(STDERR "\n");
 }
 
 #----------------------------------------------------------------------
 
 if (defined($opt_t)) {
-	print(STDERR "Writing time series to $opt_t...");
+	print(STDERR "Writing time series to <$opt_t>...");
 	
 	@antsNewLayout = ('ens','elapsed','depth','CTD_w','LADCP_w');
 	&antsOut('EOF');
@@ -530,7 +577,7 @@ if (defined($opt_t)) {
 #----------------------------------------------------------------------
 
 if (defined($opt_b)) {
-	print(STDERR "Writing bottom-track data to $opt_b...");
+	print(STDERR "Writing bottom-track data to <$opt_b>...");
 	
 	@antsNewLayout = ('depth','u','v','w','u.sig','v.sig','w.sig','ndata');
 	&antsOut('EOF');
@@ -550,7 +597,7 @@ if (defined($opt_b)) {
 #----------------------------------------------------------------------
 
 if (defined($opt_f)) {
-	print(STDERR "Writing data flags to $opt_f...");
+	print(STDERR "Writing data flags to <$opt_f>...");
 	
 	@antsNewLayout = ('ens');
 	for (my($i)=1; $i<=$LADCP{N_BINS}; $i++) {
