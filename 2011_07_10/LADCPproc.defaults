@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Tue Jul 12 21:11:56 2011
+#                    dlm: Fri Jul  8 00:06:07 2011
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 26 46 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 91 16 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [mkShearProf]
@@ -23,7 +23,6 @@
 #	Dec  9, 2010: - added doc for ASCII CTD file support
 #	Jun 15, 2011: - added Svbin_start, Svbin_end
 #	Jul  7, 2011: - added BT processing parameters
-#	Jul 12, 2011: - added $PPI_editing_enabled
 
 #----------------------------------------------------------------------
 # ASCII CTD file support
@@ -251,8 +250,6 @@ $max_shdev_sum = 1.5;
 ##      meters (on each side) by which the calculated range of the
 ##      interference is expanded before clipping.  A reasonable value would
 ##      be something like 32 (2 depth bins).
-
-undef($PPI_editing_enabled);	# set to 1 to enable PPI editing
 
 # NOTES:
 # 	- default value (90m) taken from comment in merge control files

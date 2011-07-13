@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . U H C O D E 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Tue Jul 12 21:59:07 2011
+#                    dlm: Mon Jan 10 13:23:13 2011
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 392 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 295 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from Eric's [merge.c]; with mods
@@ -32,8 +32,6 @@
 #	Oct 25, 2010: - added W_CTD_BIT, renamed W_BIT to W_OUTLIER_BIT
 #	Oct 26, 2010: - added TILT_BIT
 #	Dec 10, 2010: - modified assertion to allow processing of UL data
-#	Jul 10, 2011: - added outTDseries() call
-#	Jul 12, 2011: - replaced -p by $PPI_editing_enabled flag
 
 #======================================================================
 # VELOCITY EDITING
@@ -267,7 +265,7 @@ sub edit_velocity($$)
 		set_wake_flag($ens,$De);
 		set_misc_flags($ens,$De);
 		set_PPI_flags($ens,$De)
-			if $PPI_editing_enabled && ($clip_margin > 0);				# PPI editing is off by default
+			if $opt_p && ($clip_margin > 0);							# PPI editing is off by default
     }
 }
 
@@ -306,7 +304,6 @@ sub uv_to_shear($)
 					$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$sh_i0[$i]][$V]) / ($d1-$d0);
 		$wsh[$i] = ($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$sh_i1[$i]][$W] -
 					$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$sh_i0[$i]][$W]) / ($d1-$d0);
-		$ens[$i] = $ens;
 	}
 
 	return $nvel;
@@ -365,13 +362,13 @@ sub calc_shear($$$$)
 	my($start,$end,$grid_dz,$edit_shear) = @_;
 	my($De) = $start<$end ? 1 : -1;										# downcast: De = 1; upcast: De = -1
 
-	local(@ush_vals,@vsh_vals,@wsh_vals,@ens_vals);
+	my(@ush_vals,@vsh_vals,@wsh_vals);
 
 	my($nvel,$nsh) = (0,0);
 	for (my($ens)=$start; $ens!=$end+$De; $ens+=$De) {					# loop over all ens from start to end
 
 		local(@sh_i0,@sh_i1);
-		local(@dsh,@ush,@vsh,@wsh,@ens);
+		local(@dsh,@ush,@vsh,@wsh);
 
 		uv_to_shear($ens);
 		if ($edit_shear) {
@@ -385,11 +382,8 @@ sub calc_shear($$$$)
 			push(@{$ush_vals[$gi]},$ush[$i]);
 			push(@{$vsh_vals[$gi]},$vsh[$i]);
 			push(@{$wsh_vals[$gi]},$wsh[$i]);
-			push(@{$ens_vals[$gi]},$ens[$i]);
         }			
 	} # $ens loop
-
-	outTDseries($De==1) if ($edit_shear);								# output depth-time time series
 
 	@ush_mu  = @vsh_mu  = @wsh_mu  = ();
 	@ush_sig = @vsh_sig = @wsh_sig = ();

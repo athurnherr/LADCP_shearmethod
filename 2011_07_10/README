@@ -1,0 +1,14 @@
+======================================================================
+                    R E A D M E 
+                    doc: Wed Oct 13 12:29:50 2010
+                    dlm: Sun Jul 10 16:29:37 2011
+                    (c) 2010 A.M. Thurnherr
+                    uE-Info: 9 68 NIL 0 0 72 0 2 4 NIL ofnI
+======================================================================
+
+I froze this version before adding output for shear Visbeck diagram.
+
+=Differences with UH Software=
+
+- much simpler shear gridding
+- no PPI editing

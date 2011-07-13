@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Wed Jul 13 11:43:18 2011
+#                    dlm: Fri Jul  8 03:33:21 2011
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 422 55 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 491 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'process LADCP data to get shear, time series';
@@ -42,7 +42,6 @@ $antsSummary = 'process LADCP data to get shear, time series';
 #					acoustic backscatter depth-time-series
 #				  - disabled seabed and acoustic backscatter code when not required (e.g. UL)
 #				  - made non-diagnostic output terser
-#	Jul 11, 2011: - changed default output to .tds and added -p)rofile option
 
 ($ANTS) 	  = (`which list` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -61,7 +60,7 @@ require "$PERL_TOOLS/RDI_Coords.pl";
 require "$PERL_TOOLS/RDI_Utils.pl";
 
 $antsParseHeader = 0;
-&antsUsage('24a:b:c:df:g:i:kl:n:o:p:s:t:w:',2,
+&antsUsage('24a:b:c:df:g:i:kl:n:o:ps:t:w:',2,
 	'[use -2)dary CTD sensor pair]',
 	'[require -4)-beam LADCP solutions]',
 	'[-s)etup <file>] [-g)ps <lat,lon>]',
@@ -70,9 +69,9 @@ $antsParseHeader = 0;
 	'[-o)utput grid <resolution[5m]>]',
 	'[-i)nitial LADCP time lag <guestimate>]',
 	'[-l)ag LADCP <by>] [auto-lag -w)indow <size[120s]>] [-n) <auto-lag windows[20]]',
-	'[-d)iagnostic screen output]',
-	'output: [shear-p)rofile <file>] [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
-	'        [-a)coustic backscatter <dts-file] [bottom-trac-k) profs]',
+	'[-d)iagnostic output]',
+	'output: [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
+	'        [-a)coustic backscatter <depth-time-series file] [bottom-trac-k) profs]',
 	'<RDI file> <SeaBird file>');
 
 $RDI_Coords::minValidVels = 4 if ($opt_4);
@@ -86,7 +85,7 @@ $RDI_Coords::minValidVels = 4 if ($opt_4);
 &antsCardOpt(\$opt_n,20);
 &antsFileOpt($opt_s);
 &antsFloatOpt($opt_i);
-&antsCardOpt(\$opt_o,5);
+&antsCardOpt($opt_o);
 
 if (defined($opt_g)) {
 	($CTD{lat},$CTD{lon}) = split(',',$opt_g);
@@ -143,7 +142,7 @@ if ($LADCP{BLANKING_DISTANCE} == 0) {
 		$LADCP{ENSEMBLE}[0]->{XDUCER_FACING_UP} ? 'uplooker' : 'downlooker');
 
 $SHEAR_PREGRID_DZ = 20;
-$GRID_DZ = $opt_o;
+$GRID_DZ = defined($opt_o) ? $opt_o : 5;
 
 my($year)  = substr($LADCP{ENSEMBLE}[0]->{DATE},6,4);
 my($month) = substr($LADCP{ENSEMBLE}[0]->{DATE},0,2);
@@ -398,70 +397,10 @@ if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
 }
 
 #----------------------------------------------------------------------
-# Step 8: Edit Data & also produce depth-times-series output vial callback
+# Step 8: Edit Data
 #----------------------------------------------------------------------
 
-print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) output...");
-
-	#--------------------------------------------------------------------------------
-	# callback routine to output .tds data, called once each for down-/upcasts after
-	# shear has been gridded. Note that only the nominal (bin center) depth is known
-	# for each sample in this version.
-	
-	sub outTDseries($)
-	{
-		my($downcast) = @_; # also use local @[uvw]sh_vals[][]
-
-		if ($downcast) {
-			my($mingi);
-			for ($mingi=0; $mingi<@ush_vals; $mingi++) {
-				last if @{$ush_vals[$mingi]};
-	        }
-			&antsAddParams('min_ens',$LADCP_start,'min_elapsed',$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME},
-						   'max_ens',$LADCP_end,'max_elapsed',$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME},
-						   'min_depth',depthOfGI($mingi),'max_depth',depthOfGI($#ens_vals),'foo',$#ens_vals);
-			for (my($gi)=0; $gi<@ush_vals; $gi++) {
-				for (my($i)=0; $i<@{$ush_vals[$gi]}; $i++) {
-					&antsOut($ens_vals[$gi][$i],$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME},
-							 $downcast,depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
-				}
-	        }
-		} else {
-			for (my($gi)=$#ush_vals; $gi>=0; $gi--) {
-				for (my($i)=0; $i<@{$ush_vals[$gi]}; $i++) {
-					&antsOut($ens_vals[$gi][$i],$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME},
-							 $downcast,depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
-				}
-	        }
-	    }
-	} # sub outDSseries
-
-	#--------------------------------------------------------------------------------
-
-@antsNewLayout = ('ens','elapsed','downcast','depth','u_z','v_z','w_z');
-$commonParams = $antsCurParams;
-
-&antsAddParams('ubin_start',$ubin_start,'ubin_end',$ubin_end,		# record processing params
-			   'wbin_start',$wbin_start,'wbin_end',$wbin_end,
-			   'shbin_start',$shbin_start,'shbin_end',$shbin_end,
-			   'w_ref_bin',$w_ref_bin,'w_dif',$w_dif,
-			   'wake_hd_dif',$wake_hd_dif,'wake_ang_min',$wake_ang_min,
-			   'min_wake_w',$min_wake_w,'n_wake_bins',$n_wake_bins,
-			   'e_max',$e_max,'min_cor',$min_cor,
-			   'max_shdev',$max_shdev,'max_shdev_sum',$max_shdev_sum,
-			   'water_depth',round($water_depth),'water_depth.sig',round($sig_water_depth),
-			   'min_hab',round($min_hab),'PPI_editing_enabled',$PPI_editing_enabled,
-			   'clip_margin',$clip_margin,'first_clip_bin',$first_clip_bin,
-			   'Svbin_start',$Svbin_start,'Svbin_end',$Svbin_end,
-			   'BT_bin_start',$BT_bin_start,'BT_bin_search_above',$BT_bin_search_above,
-			   'BT_max_bin_spread',$BT_max_bin_spread,'BT_max_w_difference',$BT_max_w_difference,
-);
-if (defined($BT_min_depth)) {
-	&antsAddParams('BT_min_depth',$BT_min_depth,'BT_max_depth',$BT_max_depth);
-} else {
-	&antsAddParams('BT_max_depth_error',$BT_max_depth_error);
-}
-$fullParams = $antsCurParams;
+print(STDERR "Calculating shear profiles...");
 
 $LADCP_start = 1 if ($LADCP_start == 0);							# ensure that there is previous ensemble
 
@@ -523,44 +462,57 @@ if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
 }
 
 #----------------------------------------------------------------------
-# Step 10: Write Output Profiles if requested
+# Step 10: Write Output Files
 #----------------------------------------------------------------------
 
-if (defined($opt_p)) {
+print(STDERR "Writing shear profiles...");
 
-	print(STDERR "Writing shear profiles...");
-	
-	@antsNewLayout = ('depth','dc_nshear','dc_u_z','dc_u_z.sig','dc_v_z','dc_v_z.sig','dc_w_z','dc_w_z.sig',
-							  'uc_nshear','uc_u_z','uc_u_z.sig','uc_v_z','uc_v_z.sig','uc_w_z','uc_w_z.sig',
-							  'nshear','u_z','u_z.sig','v_z','v_z.sig','w_z','w_z.sig','Sv','Sv.n');
-							  
-	&antsOut('EOF');
-    close(STDOUT);
-	open(STDOUT,">$opt_p") || croak("$opt_p: $!\n");
+@antsNewLayout = ('depth','dc_nshear','dc_u_z','dc_u_z.sig','dc_v_z','dc_v_z.sig','dc_w_z','dc_w_z.sig',
+						  'uc_nshear','uc_u_z','uc_u_z.sig','uc_v_z','uc_v_z.sig','uc_w_z','uc_w_z.sig',
+						  'nshear','u_z','u_z.sig','v_z','v_z.sig','w_z','w_z.sig','Sv','Sv.n');
+						  
+$commonParams = $antsCurParams;
+&antsAddParams('ubin_start',$ubin_start,'ubin_end',$ubin_end,		# record processing params
+			   'wbin_start',$wbin_start,'wbin_end',$wbin_end,
+			   'shbin_start',$shbin_start,'shbin_end',$shbin_end,
+			   'w_ref_bin',$w_ref_bin,'w_dif',$w_dif,
+			   'wake_hd_dif',$wake_hd_dif,'wake_ang_min',$wake_ang_min,
+			   'min_wake_w',$min_wake_w,'n_wake_bins',$n_wake_bins,
+			   'e_max',$e_max,'min_cor',$min_cor,
+			   'max_shdev',$max_shdev,'max_shdev_sum',$max_shdev_sum,
+			   'water_depth',round($water_depth),'water_depth.sig',round($sig_water_depth),
+			   'min_hab',round($min_hab),
+			   'clip_margin',$clip_margin,'first_clip_bin',$first_clip_bin,
+			   'Svbin_start',$Svbin_start,'Svbin_end',$Svbin_end,
+			   'BT_bin_start',$BT_bin_start,'BT_bin_search_above',$BT_bin_search_above,
+			   'BT_max_bin_spread',$BT_max_bin_spread,'BT_max_w_difference',$BT_max_w_difference,
+);
+if (defined($BT_min_depth)) {
+	&antsAddParams('BT_min_depth',$BT_min_depth,'BT_max_depth',$BT_max_depth);
+} else {
+	&antsAddParams('BT_max_depth_error',$BT_max_depth_error);
+}
 
-	$antsCurParams = $fullParams;
+for (my($gi)=0; $gi<@ush_mu; $gi++) {
+	&antsOut(depthOfGI($gi),										# depth in center of bin
+			 numberp($dc_sh_n[$gi])?$dc_sh_n[$gi]:0,				# downcast
+			 $dc_ush_mu[$gi],$dc_ush_sig[$gi],
+			 $dc_vsh_mu[$gi],$dc_vsh_sig[$gi],
+			 $dc_wsh_mu[$gi],$dc_wsh_sig[$gi],
+			 numberp($uc_sh_n[$gi])?$uc_sh_n[$gi]:0,				# upcast
+			 $uc_ush_mu[$gi],$uc_ush_sig[$gi],
+			 $uc_vsh_mu[$gi],$uc_vsh_sig[$gi],
+			 $uc_wsh_mu[$gi],$uc_wsh_sig[$gi],
+			 $sh_n[$gi],											# combined
+			 $ush_mu[$gi],$ush_sig[$gi],
+			 $vsh_mu[$gi],$vsh_sig[$gi],
+			 $wsh_mu[$gi],$wsh_sig[$gi],
+			 $nSv_prof[$gi]?$sSv_prof[$gi]/$nSv_prof[$gi]:nan,
+			 $nSv_prof[$gi],
+	);
+}
 
-	for (my($gi)=0; $gi<@ush_mu; $gi++) {
-		&antsOut(depthOfGI($gi),										# depth in center of bin
-				 numberp($dc_sh_n[$gi])?$dc_sh_n[$gi]:0,				# downcast
-				 $dc_ush_mu[$gi],$dc_ush_sig[$gi],
-				 $dc_vsh_mu[$gi],$dc_vsh_sig[$gi],
-				 $dc_wsh_mu[$gi],$dc_wsh_sig[$gi],
-				 numberp($uc_sh_n[$gi])?$uc_sh_n[$gi]:0,				# upcast
-				 $uc_ush_mu[$gi],$uc_ush_sig[$gi],
-				 $uc_vsh_mu[$gi],$uc_vsh_sig[$gi],
-				 $uc_wsh_mu[$gi],$uc_wsh_sig[$gi],
-				 $sh_n[$gi],											# combined
-				 $ush_mu[$gi],$ush_sig[$gi],
-				 $vsh_mu[$gi],$vsh_sig[$gi],
-				 $wsh_mu[$gi],$wsh_sig[$gi],
-				 $nSv_prof[$gi]?$sSv_prof[$gi]/$nSv_prof[$gi]:nan,
-				 $nSv_prof[$gi],
-		);
-	}
-	
-	print(STDERR "\n");
-} # if -p
+print(STDERR "\n");
 
 #---------------------------------------
 # Acoustic backscatter depth-time-series
