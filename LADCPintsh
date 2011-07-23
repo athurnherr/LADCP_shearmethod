@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Thu Jul  7 06:30:50 2011
+#                    dlm: Tue Jul 19 22:04:31 2011
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 32 28 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 36 71 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -15,6 +15,8 @@ $antsSummary = 'integrate LADCP shear';
 #	- cubic velocity interpolation across PPI gap from Eric's code has not been implemented (yet?)
 #	- Eric's ndata criteria had to be scaled by 5/8 due to the different gridding used; I decided,
 #	  conservatively, to scale only the -s criterion (n1 in Eric's code)
+#	- currently, shear gaps are assumed to have vanishing shear; much better solutions are
+#	  possible 
 
 # WEIRDNESSES:
 #	- in Eric's [avg_sh.m] the calculation of output shear stddev incorrectly assumes that the 4th column
@@ -30,6 +32,8 @@ $antsSummary = 'integrate LADCP shear';
 #	Dec  9, 2010: - allowed for empty BT file
 #	Feb 16, 2011: - BUG: gaps in shear data were not handled correctly in baroclinic solution
 #	Jul  7, 2011: - added -m
+#	Jul 19, 2011: - added shear sigma output for shear inversion
+#				  - BUG: dc/uc v component was not correctly referenced
 
 ($ANTS) = (`which list` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
@@ -95,8 +99,8 @@ my(@gaps); my($curGap) = 0;
 for (my($r)=0; &antsIn(); $r++) {
 	my(@UL_);
 	if (defined($opt_u)) {
-		@UL_ = &antsFileIn(ULF);						# read UL shear data
-		undef($opt_u) unless (@UL_);					# cheap trick
+		@UL_ = &antsFileIn(ULF);							# read UL shear data
+		undef($opt_u) unless (@UL_);						# cheap trick
 	}
 	
 	$depth[$r] = $ants_[0][$depthF];						## depth grid values
@@ -109,9 +113,11 @@ for (my($r)=0; &antsIn(); $r++) {
 		$dc_ndata += $UL_[$dc_nshF];
 		$uc_ndata += $UL_[$uc_nshF];
 	}
+	$dc_ndata[$r] = $dc_ndata;
+	$uc_ndata[$r] = $uc_ndata;
 	$ndata[$r] = $dc_ndata + $uc_ndata;
 
-	if (defined($opt_u)) {
+	if (defined($opt_u)) {									# dual-head instrument
 		if ($dc_ndata > 0) {								# downcast shear
 			my($DLf) = $ants_[0][$dc_nshF] / $dc_ndata;
 			my($ULf) =      $UL_[$dc_nshF] / $dc_ndata;
@@ -150,7 +156,7 @@ for (my($r)=0; &antsIn(); $r++) {
 		} else {
 			$uc_uz[$r] = $uc_vz[$r] = $uc_wz[$r] = nan;
 	    }
-	} else {
+	} else {	# downlooker only
 		if ($dc_ndata >= $opt_r) {							# downcast shear
 			$dc_uz[$r] = $ants_[0][$dc_uzF];
 			$dc_vz[$r] = $ants_[0][$dc_vzF];
@@ -167,7 +173,7 @@ for (my($r)=0; &antsIn(); $r++) {
 	    }
     }
     
-	if ($depth[$r] < $opt_w) {			## use average of up and down casts at top of profile
+	if ($depth[$r] < $opt_w) {								## use average of up and down casts at top of profile
 		if ($dc_ndata>0 && $uc_ndata>0 && $ndata[$r]>=$opt_r) {
 			$uz[$r] = $dc_uz[$r]/2 + $uc_uz[$r]/2;
 			$vz[$r] = $dc_vz[$r]/2 + $uc_vz[$r]/2;
@@ -183,7 +189,7 @@ for (my($r)=0; &antsIn(); $r++) {
 		} else {
 			$uz[$r] = $vz[$r] = $wz[$r] = nan;
 		}
-	} else {							## use weighted average of up and down cast data at bottom of profile
+	} else {												## use weighted average of up and down cast data at bottom of profile
 		if ($ndata[$r] >= $opt_r) {
 			my($dcf) = $dc_ndata / $ndata[$r];
 			my($ucf) = $uc_ndata / $ndata[$r];
@@ -235,6 +241,40 @@ for (my($r)=0; &antsIn(); $r++) {
 							   $ants_[0][$uc_nshF] * $ants_[0][$uc_vzsF]**2) / $ndata[$r]);
 			$wzsig[$r] = sqrt(($ants_[0][$dc_nshF] * $ants_[0][$dc_wzsF]**2 +
 	                           $ants_[0][$uc_nshF] * $ants_[0][$uc_wzsF]**2) / $ndata[$r]);
+	    }
+	} else {
+		$uzsig[$r] = $vzsig[$r] = $wzsig[$r] = nan;
+	}
+
+	if ($dc_ndata >= $opt_r) {									# same calc for downcast only
+		if (defined($opt_u)) {
+			$dc_uzsig[$r] = sqrt(($ants_[0][$dc_nshF] * $ants_[0][$dc_uzsF]**2 +
+							           $UL_[$dc_nshF] *      $UL_[$dc_uzsF]**2) / $dc_ndata);
+			$dc_vzsig[$r] = sqrt(($ants_[0][$dc_nshF] * $ants_[0][$dc_vzsF]**2 +
+							           $UL_[$dc_nshF] *      $UL_[$dc_vzsF]**2) / $dc_ndata);
+			$dc_wzsig[$r] = sqrt(($ants_[0][$dc_nshF] * $ants_[0][$dc_wzsF]**2 +
+							           $UL_[$dc_nshF] *      $UL_[$dc_wzsF]**2) / $dc_ndata);
+		} else {
+			$dc_uzsig[$r] = $ants_[0][$dc_uzsF];
+			$dc_vzsig[$r] = $ants_[0][$dc_vzsF];
+			$dc_wzsig[$r] = $ants_[0][$dc_wzsF];
+	    }
+	} else {
+		$uzsig[$r] = $vzsig[$r] = $wzsig[$r] = nan;
+	}
+
+	if ($uc_ndata >= $opt_r) {									# same calc for upcast only
+		if (defined($opt_u)) {
+			$uc_uzsig[$r] = sqrt(($ants_[0][$uc_nshF] * $ants_[0][$uc_uzsF]**2 +
+							           $UL_[$uc_nshF] *      $UL_[$uc_uzsF]**2) / $uc_ndata);
+			$uc_vzsig[$r] = sqrt(($ants_[0][$uc_nshF] * $ants_[0][$uc_vzsF]**2 +
+							           $UL_[$uc_nshF] *      $UL_[$uc_vzsF]**2) / $uc_ndata);
+			$uc_wzsig[$r] = sqrt(($ants_[0][$uc_nshF] * $ants_[0][$uc_wzsF]**2 +
+							           $UL_[$uc_nshF] *      $UL_[$uc_wzsF]**2) / $uc_ndata);
+		} else {
+			$uc_uzsig[$r] = $ants_[0][$uc_uzsF];
+			$uc_vzsig[$r] = $ants_[0][$uc_vzsF];
+			$uc_wzsig[$r] = $ants_[0][$uc_wzsF];
 	    }
 	} else {
 		$uzsig[$r] = $vzsig[$r] = $wzsig[$r] = nan;
@@ -371,18 +411,18 @@ if (defined($opt_b)) {											# reference to bottom-track profile
 		$refW = $sumW/$nSumVel - $wSumBTw/$sumVarBTw;
 	    
 		$dc_refU = $dc_sumU/$dc_nSumVel - $dc_wSumBTu/$dc_sumVarBTu;
-		$dc_refV = $dc_sUmV/$dc_nSumVel - $dc_wSumBTv/$dc_sumVarBTv;
+		$dc_refV = $dc_sumV/$dc_nSumVel - $dc_wSumBTv/$dc_sumVarBTv;
 		$dc_refW = $dc_sumW/$dc_nSumVel - $dc_wSumBTw/$dc_sumVarBTw;
 	    
 		$uc_refU = $uc_sumU/$uc_nSumVel - $uc_wSumBTu/$uc_sumVarBTu;
-		$uc_refV = $uc_sUmV/$uc_nSumVel - $uc_wSumBTv/$uc_sumVarBTv;
+		$uc_refV = $uc_sumV/$uc_nSumVel - $uc_wSumBTv/$uc_sumVarBTv;
 	    $uc_refW = $uc_sumW/$uc_nSumVel - $uc_wSumBTw/$uc_sumVarBTw;
 	} else {
 		&antsInfo("$opt_b: no valid BT data --- calculating baroclinic solution only");
 	}
 }
 
-unless (defined($refU)) {
+unless (defined($refU)) {									# no reference velocity => use zero mean
 	my($sumU,$sumV,$sumW,$dc_sumU,$dc_sumV,$dc_sumW,$uc_sumU,$uc_sumV,$uc_sumW);
 	my($nSumVel,$dc_nSumVel,$uc_nSumVel);
 
@@ -436,11 +476,15 @@ printf(STDERR "X-Factor = %.1f\n",$X_Factor);
 # Output Velocity Profile
 #======================================================================
 
-@antsNewLayout = ('depth','u','v','w','dc_u','dc_v','dc_w','uc_u','uc_v','uc_w');
+@antsNewLayout = ('depth','u','v','w','u_z.sig','v_z.sig','w_z.sig','ndata',
+				  'dc_u','dc_v','dc_w','dc_u_z.sig','dc_v_z.sig','dc_w_z.sig','dc_ndata',
+				  'uc_u','uc_v','uc_w','uc_u_z.sig','uc_v_z.sig','uc_w_z.sig','uc_ndata');
+
 for (my($r)=0; $r<@depth; $r++) {
-	&antsOut($depth[$r]+$DZ/2,$u[$r],$v[$r],$w[$r],
-							  $dc_u[$r],$dc_v[$r],$dc_w[$r],
-							  $uc_u[$r],$uc_v[$r],$uc_w[$r]);
+	&antsOut($depth[$r]+$DZ/2,
+			 $u[$r],$v[$r],$w[$r],$uzsig[$r],$vzsig[$r],$wzsig[$r],$ndata[$r],
+			 $dc_u[$r],$dc_v[$r],$dc_w[$r],$dc_uzsig[$r],$dc_vzsig[$r],$dc_wzsig[$r],$dc_ndata[$r],
+			 $uc_u[$r],$uc_v[$r],$uc_w[$r],$uc_uzsig[$r],$uc_vzsig[$r],$uc_wzsig[$r],$uc_ndata[$r]);
 }
 
 &antsExit();
