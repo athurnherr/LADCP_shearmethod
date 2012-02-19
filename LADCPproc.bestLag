@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B E S T L A G 
 #                    doc: Tue Sep 28 21:58:48 2010
-#                    dlm: Fri Jul  8 02:54:29 2011
+#                    dlm: Fri Jul 15 14:22:55 2011
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 55 101 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 22 20 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # TODO:
@@ -18,6 +18,8 @@
 #				  - added support of -i
 #	Jul  7, 2011: - added code to remove window-mean of w before lagging to
 #				    make it work in regions of crazy ocean w (IWISE 16007)
+#	Jul 15, 2011: - changed screen-output of lag to take first guess lag into
+#					account
 
 sub interp_LADCP_w($$)
 {
@@ -177,9 +179,9 @@ sub lagLADCP2CTD()
 		if ($nBest{$best_lag} < $opt_n/2);
 
 	if ($nBest{$best_lag} == $nLags) {
-		printf(STDERR "\n\t\tunanimous lag = %ds\n",$best_lag*$CTD{sampint});
+		printf(STDERR "\n\t\tunanimous lag = %ds\n",($first_guess_lag+$best_lag)*$CTD{sampint});
 	} else {
-		printf(STDERR "\n\t\tmost popular lag = %ds\n",$best_lag*$CTD{sampint});
+		printf(STDERR "\n\t\tmost popular lag = %ds\n",($first_guess_lag+$best_lag)*$CTD{sampint});
 	}
 
 	&antsAddParams('LADCP_time_lag',($first_guess_lag + $best_lag) * $CTD{sampint});

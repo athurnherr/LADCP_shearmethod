@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . L O A D C T D 
 #                    doc: Thu Dec  9 18:39:01 2010
-#                    dlm: Sat Jan 22 21:40:12 2011
+#                    dlm: Sun Feb  5 12:40:11 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 174 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 16 78 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -12,6 +12,8 @@
 #	Dec 16, 2010: - BUG cnv read did not work any more
 #	Jan 10, 2011: - added code to skip ANTS header
 #	Jan 22, 2011: - adapted to new -g
+#	Jul 15, 2011: - added $CTD{first_elapsed}
+#	Feb  5, 2012: - BUG: ASCII file did not deal with leading spaces correctly
 
 sub readCTD_ASCII($$)
 {
@@ -32,6 +34,7 @@ sub readCTD_ASCII($$)
 	my($ds);
 	while (chomp($ds = <F>)) {
 		next if ($ds =~ /^#/);
+		$ds =~ s/^\s+//;					# strip leading spaces
 		my(@rec) = split('\s+',$ds);
 		push(@{$dtaR->{press}},($rec[$CTD_ASCII_press_field-1] == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_press_field-1]);
 		push(@{$dtaR->{temp}}, ($rec[$CTD_ASCII_temp_field-1]  == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_temp_field-1]);
@@ -55,7 +58,7 @@ sub readCTD_ASCII($$)
 sub readCTD_CNV($$)
 {
 	my($fn,$dtaR) = @_;
-	my($CTD_nrecs,$CTD_nfields,$pressF,$tempF,$salinF);
+	my($CTD_nrecs,$CTD_nfields,$pressF,$tempF,$salinF,$elapsedF);
 	my($CTD_badval,$CTD_file_type);
 
 	open(F,$fn) || croak("$fn: $!\n");
@@ -68,6 +71,7 @@ sub readCTD_CNV($$)
 	    
 		$CTD_nfields = $',next if ($hdr =~ /nquan = /); 				# Layout
 		$CTD_nrecs = $',next if ($hdr =~ /nvalues = /);
+		$elapsedF = $1,next if ($hdr =~ /name (\d+) = timeS:/);
 		$pressF = $1,next if ($hdr =~ /name (\d+) = prDM:/);
 		if ($opt_2) {
 			$tempF	= $1,next if ($hdr =~ /name (\d+) = t190C:/);
@@ -131,6 +135,8 @@ sub readCTD_CNV($$)
 	if ($CTD_file_type eq 'ascii') {
 		while (1) {
 			last unless (my(@rec) = &antsFileIn(F));
+			$dtaR->{first_elapsed} = $rec[$elapsedF]
+				if defined($elapsedF) && !defined($dtaR->{first_elapsed});
 			push(@{$dtaR->{press}},($rec[$pressF] == $CTD_badval) ? nan : $rec[$pressF]);
 			push(@{$dtaR->{temp}}, ($rec[$tempF]  == $CTD_badval) ? nan : $rec[$tempF]);
 			push(@{$dtaR->{salin}},($rec[$salinF] == $CTD_badval) ? nan : $rec[$salinF]);

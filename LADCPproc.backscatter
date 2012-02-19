@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B A C K S C A T T E R 
 #                    doc: Wed Oct 20 13:02:27 2010
-#                    dlm: Thu Jul  7 08:55:45 2011
+#                    dlm: Fri Jul 15 11:39:37 2011
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 96 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 106 65 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -14,6 +14,8 @@
 #				    subset of bins
 #	Jul  7, 2011: - use $BEAM? vars to clarify code
 #				  - save SV values to use in BT code
+#	Jul 14, 2011: - implemented Sv_V04
+#	Jul 15, 2011: - modified Sv_V04 to take noise levels into account
 
 my($BEAM1) = 0;
 my($BEAM2) = 1;
@@ -41,7 +43,7 @@ sub log10 {
     return log($n)/log(10);
 }   
 
-sub Sv($$$$$)
+sub Sv_D99($$$$$)
 {
     my($temp,$PL,$Er,$R,$EA) = @_;
     my($C)      = -143;                 # RDI Workhorse monitor
@@ -52,6 +54,75 @@ sub Sv($$$$$)
     
     return $C + 10*log10(($temp+273)*$R**2) - $Ldbm - $PdbW
               + 2*$alpha*$R + $Kc*($EA-$Er);
+}
+
+#----------------------------------------------------------------------
+# Volume Scattering Coefficient, following Visbeck (code 2004)
+#
+## function [ts,bcs]=targ($EA,$R,$alpha,$PL,$EAS,$ap)
+## Target strength of EA for volume scatterer
+## $EA = echoamp in  dB
+## $R = distance in  m
+## $alpha = attenuation dB/m
+## $PL = pulse/bin legth in  m
+## $EAS = source level
+## $ap = aperature in degree
+## M. Visbeck 2004
+
+# NB:
+#	- overall, correction with distance works similarly well to Deines (1999)
+#	- constant bias, which could be taken care of by changing EAS
+#	- however, much more serious UL/DL differences
+
+sub Sv_V04($$$$$)
+{
+    my($temp,$PL,$Er,$R,$EA) = @_;	# only uses $R and $EA
+
+#	my($alpha) = 0.039;		## attenuation dB/m for 150 kHz
+	my($alpha) = 0.062;		## attenuation dB/m for 300 kHz
+	my($EAS) = 100;			## source level in dB
+	my($ap) = rad(2);		## beam aperature in DEGREE convert to radian
+
+	my($r1) = tan($ap)*($R-$PL/2);	## radius of top and bottom of each bin
+	my($r2) = tan($ap)*($R+$PL/2);
+	my($V) = $PI*$PL/3 * ($r1**2+$r2**2+$r1*$r2);	## ensonified volume 
+
+	my($TL) = 20*log10($R) + $alpha*$R;				## transmission loss
+
+	my($TS) = 0.45*$EA - $EAS + 2*$TL - 10*log10($V);	## target strength
+	my($BCS) = exp($TS/10);							## backscatter cross section
+
+	return $TS;
+}
+
+
+# modifications from Visbeck:
+#	- add 0.05 to beam radius
+#	- take beam noise into account
+#	- corrected(?) ensonified volume
+
+# NB:
+#	- beam noise takes care of UL/DL differences
+#	- constant bias, which could be taken care of by changing EAS
+#	- remaining changes don't do much
+
+sub Sv_T11($$$$$)
+{
+    my($temp,$PL,$Er,$R,$EA) = @_;
+
+	my($alpha) = 0.062;		## attenuation dB/m for 300 kHz
+	my($EAS) = 100;			## source level in dB
+	my($ap) = rad(2);		## beam aperature in DEGREE convert to radian
+
+	my($r1) = 0.05 + tan($ap)*($R-$PL/2);	## radius of top and bottom of each bin
+	my($r2) = 0.05 + tan($ap)*($R+$PL/2);
+	my($V) = $PI*($r1**2+$r2**2)/2 * $PL;	## ensonified volume 
+
+	my($TL) = 20*log10($R) + $alpha*$R;		## transmission loss
+
+	my($TS) = 0.45*($EA-$Er) - $EAS + 2*$TL - 10*log10($V);	## target strength
+
+	return $TS;
 }
 
 sub mk_backscatter_profs($$)
@@ -76,19 +147,29 @@ sub mk_backscatter_profs($$)
 			my($gi) = int(&depthOfBin($ens,$bin) / $GRID_DZ);
 			next if ($gi < 0);
 			my($range_to_bin) = &dzToBin($ens,$bin) / cos(rad($LADCP{BEAM_ANGLE}));
-			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM1] = Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+
+			my($Svfunc);
+			if ($opt_u =~ /^[dD]/) {
+				$Svfunc = \&Sv_D99;
+			} elsif ($opt_u =~ /^[vV]/) {
+				$Svfunc = \&Sv_V04;
+			} else {
+				$Svfunc = \&Sv_T11;
+			}
+
+			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM1] = &$Svfunc($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
 							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
 														    $Er[$BEAM1],$range_to_bin,
 							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM1]);
-			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM2] = Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM2] = &$Svfunc($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
 							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
 														    $Er[$BEAM2],$range_to_bin,
 							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM2]);
-			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM3] = Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM3] = &$Svfunc($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
 							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
 														    $Er[$BEAM3],$range_to_bin,
 							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM3]);
-			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM4] = Sv($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM4] = &$Svfunc($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
 							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
 														    $Er[$BEAM4],$range_to_bin,
 							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM4]);

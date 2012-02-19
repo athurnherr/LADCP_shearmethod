@@ -2,17 +2,27 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Wed Jul 13 11:43:18 2011
+#                    dlm: Sun Feb  5 12:28:54 2012
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 422 55 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 61 44 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'process LADCP data to get shear, time series';
 
 # NOTES:
-#	- this code is based on merge.c written by Eric Firing
-#	- comments starting with ## are taken from Eric's code
-#	- for SeaBird files, CTD elapsed time is estimated from recno * CTD{sampint}
+#	- the shear-method editing in this code is based on Eric Firing's merge.c
+#	- there are three different codes for estimating acoustic backscatter coefficients:
+#		- one based on Deines (1999)
+#		- one based on Visbeck (2004) getbtrack.m
+#		- my own, slightly modified from Visbeck (2004)
+#	- comments starting with ## are taken verbatim from the original implementations
+#	- the basic idea of the time lagging implemented in this code is similar
+#	  to the one implemented in Martin Visbeck's bestlag.m
+#	- for SeaBird files:
+#		- CTD elapsed time is estimated from recno * CTD{sampint}
+#		- first elapsed time is added on output
+#	- output elapsed time is from CTD to allow yoyo processing without loss of
+#	  time information
 #	- CTD{elapsed} is undefined for records before instrument is in the water
 #	- ITS-90 temp field in degC required
 #	- salin field prequired
@@ -43,6 +53,12 @@ $antsSummary = 'process LADCP data to get shear, time series';
 #				  - disabled seabed and acoustic backscatter code when not required (e.g. UL)
 #				  - made non-diagnostic output terser
 #	Jul 11, 2011: - changed default output to .tds and added -p)rofile option
+#	Jul 14, 2011: - added -u)se D[eines1999][V[isbeck2004]]
+#	Jul 15, 2011: - changed output bin# to 1-based in -a output
+#				  - added T[hurnherr11] -u)se option
+#				  - added $CTD{first_elapsed}
+#	Jul 27, 2011: - replaced ndata by nsamp
+#	Feb  5, 2012: - added profile max depth consistency check
 
 ($ANTS) 	  = (`which list` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -61,7 +77,7 @@ require "$PERL_TOOLS/RDI_Coords.pl";
 require "$PERL_TOOLS/RDI_Utils.pl";
 
 $antsParseHeader = 0;
-&antsUsage('24a:b:c:df:g:i:kl:n:o:p:s:t:w:',2,
+&antsUsage('24a:b:c:df:g:i:kl:n:o:p:s:t:u:w:',2,
 	'[use -2)dary CTD sensor pair]',
 	'[require -4)-beam LADCP solutions]',
 	'[-s)etup <file>] [-g)ps <lat,lon>]',
@@ -70,6 +86,7 @@ $antsParseHeader = 0;
 	'[-o)utput grid <resolution[5m]>]',
 	'[-i)nitial LADCP time lag <guestimate>]',
 	'[-l)ag LADCP <by>] [auto-lag -w)indow <size[120s]>] [-n) <auto-lag windows[20]]',
+	'[-u)se D[eines99]|V[isbeck04][|T[hurnherr11]]',
 	'[-d)iagnostic screen output]',
 	'output: [shear-p)rofile <file>] [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
 	'        [-a)coustic backscatter <dts-file] [bottom-trac-k) profs]',
@@ -88,6 +105,13 @@ $RDI_Coords::minValidVels = 4 if ($opt_4);
 &antsFloatOpt($opt_i);
 &antsCardOpt(\$opt_o,5);
 
+if (defined($opt_u)) {
+	croak("$0: cannot decode -u $opt_u\n")
+		unless ($opt_u =~ /^[dDvVtT]/);
+} else {
+	$opt_u = 'Thurnherr11';
+}
+
 if (defined($opt_g)) {
 	($CTD{lat},$CTD{lon}) = split(',',$opt_g);
 	croak("$0: cannot decode -g $opt_g\n")
@@ -100,7 +124,6 @@ if (defined($opt_c)) {
 		unless numberp($CC_offset) && numberp($CC_cos_fac) && numberp($CC_sin_fac);
 }
 	
-
 $LADCP_file = &antsFileArg();
 $CTD_file 	= &antsFileArg();
 
@@ -283,6 +306,10 @@ if ($opt_d) {
 
 print(STDERR "\n");
 
+croak(sprintf("$0: LADCP bottom depth (%dm) inconsistent with max CTD pressure (%ddbar)\n",
+		$LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH},$CTD{maxpress}))
+	if (abs($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}-$CTD{maxpress})/$CTD{maxpress} > 0.05);
+
 #----------------------------------------------------------------------
 # Step 5: Add CTD to LADCP Data & correct velocities for sound speed
 #	- {DEPTH} field is overwritten!
@@ -398,7 +425,7 @@ if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
 }
 
 #----------------------------------------------------------------------
-# Step 8: Edit Data & also produce depth-times-series output vial callback
+# Step 8: Edit Data & also produce depth-time-series output vial callback
 #----------------------------------------------------------------------
 
 print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) output...");
@@ -417,19 +444,19 @@ print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) ou
 			for ($mingi=0; $mingi<@ush_vals; $mingi++) {
 				last if @{$ush_vals[$mingi]};
 	        }
-			&antsAddParams('min_ens',$LADCP_start,'min_elapsed',$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME},
-						   'max_ens',$LADCP_end,'max_elapsed',$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME},
-						   'min_depth',depthOfGI($mingi),'max_depth',depthOfGI($#ens_vals),'foo',$#ens_vals);
+			&antsAddParams('min_ens',$LADCP_start,'min_elapsed',$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+						   'max_ens',$LADCP_end,'max_elapsed',$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+						   'min_depth',depthOfGI($mingi),'max_depth',depthOfGI($#ens_vals));
 			for (my($gi)=0; $gi<@ush_vals; $gi++) {
-				for (my($i)=0; $i<@{$ush_vals[$gi]}; $i++) {
-					&antsOut($ens_vals[$gi][$i],$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME},
+				for (my($i)=0; $i<@{$ush_vals[$gi]}; $i++){
+					&antsOut($ens_vals[$gi][$i],$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
 							 $downcast,depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
 				}
 	        }
 		} else {
 			for (my($gi)=$#ush_vals; $gi>=0; $gi--) {
 				for (my($i)=0; $i<@{$ush_vals[$gi]}; $i++) {
-					&antsOut($ens_vals[$gi][$i],$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME},
+					&antsOut($ens_vals[$gi][$i],$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
 							 $downcast,depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
 				}
 	        }
@@ -577,8 +604,8 @@ if (defined($opt_a)) {
 	open(STDOUT,">$opt_a") || croak("$opt_a: $!\n");
 
 	$antsCurParams = $commonParams;
-	&antsAddParams('min_elapsed',$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME},
-				   'max_elapsed',$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME},
+	&antsAddParams('min_elapsed',$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+				   'max_elapsed',$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
 				   'min_depth',$LADCP{ENSEMBLE}[$LADCP_top]->{XDUCER_FACING_UP} ?
 	   					&depthOfBin($LADCP_top,$LADCP{N_BINS}-1) : $LADCP{ENSEMBLE}[$LADCP_top]->{DEPTH},
 				   'max_depth',$LADCP{ENSEMBLE}[$LADCP_bottom]->{XDUCER_FACING_UP} ?
@@ -588,9 +615,9 @@ if (defined($opt_a)) {
 	for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
 		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
 			&antsOut($LADCP{ENSEMBLE}[$ens]->{NUMBER},
-					 $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME},
+					 $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
 					 $LADCP{ENSEMBLE}[$ens]->{DEPTH},
-					 &depthOfBin($ens,$bin),$bin,
+					 &depthOfBin($ens,$bin),$bin+1,
 					 ($ens <= $LADCP_bottom) ? 1 : 0,
 					 @{$LADCP{ENSEMBLE}[$ens]->{SV}[$bin]},
 					 median(@{$LADCP{ENSEMBLE}[$ens]->{SV}[$bin]})
@@ -614,7 +641,7 @@ if (defined($opt_t)) {
 	
 	for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
 		&antsOut($LADCP{ENSEMBLE}[$ens]->{NUMBER},
-				 $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME},
+				 $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
 				 $LADCP{ENSEMBLE}[$ens]->{DEPTH},
 				 $LADCP{ENSEMBLE}[$ens]->{CTD_W},
 				 $LADCP{ENSEMBLE}[$ens]->{W});
@@ -627,7 +654,7 @@ if (defined($opt_t)) {
 if (defined($opt_b)) {
 	print(STDERR "Writing bottom-track data to <$opt_b>...");
 	
-	@antsNewLayout = ('depth','u','v','w','u.sig','v.sig','w.sig','ndata');
+	@antsNewLayout = ('depth','u','v','w','u.sig','v.sig','w.sig','nsamp');
 	&antsOut('EOF');
 	$antsCurParams = $commonParams;
 	close(STDOUT);
