@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . U H C O D E 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Tue Jul 12 21:59:07 2011
+#                    dlm: Sun Feb 19 21:05:16 2012
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 392 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 413 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from Eric's [merge.c]; with mods
@@ -34,6 +34,7 @@
 #	Dec 10, 2010: - modified assertion to allow processing of UL data
 #	Jul 10, 2011: - added outTDseries() call
 #	Jul 12, 2011: - replaced -p by $PPI_editing_enabled flag
+#	Feb 19, 2012: - added elapsed time to binned shear output
 
 #======================================================================
 # VELOCITY EDITING
@@ -273,9 +274,15 @@ sub edit_velocity($$)
 
 #======================================================================
 # CALCULATE VELOCITY SHEAR
-#	- output in @ush_mu,@vsh_mu,@wsh_mu,@ush_sig,@vsh_sig,@wsh_sig
+#	- final output in @ush_mu,@vsh_mu,@wsh_mu,@ush_sig,@vsh_sig,@wsh_sig
+#		NEW (ant): elapsed time output in @esh_mu
 # 	- @sh_i0, @sh_i1, @dsh, @ush, @vsh, @wsh are defined "local" in calc_shear
 #======================================================================
+
+#----------------------------------------------------------------------
+# uv_to_shear(ens)
+#	- sets @sh_i0, @sh_i1, @dsh, @ush, @vsh, @wsh for a given ensemble
+#----------------------------------------------------------------------
 
 sub uv_to_shear($)
 {
@@ -391,11 +398,11 @@ sub calc_shear($$$$)
 
 	outTDseries($De==1) if ($edit_shear);								# output depth-time time series
 
-	@ush_mu  = @vsh_mu  = @wsh_mu  = ();
+	@ush_mu  = @vsh_mu  = @wsh_mu  = @esh_mu  = ();
 	@ush_sig = @vsh_sig = @wsh_sig = ();
 
 	for (my($gi)=0; $gi<@ush_vals; $gi++) {								# calc grid means & stddev
-		my($sum_ush,$sum_vsh,$sum_wsh);
+		my($sum_ush,$sum_vsh,$sum_wsh,$sum_esh);
 
 		$sh_n[$gi] = @{$ush_vals[$gi]};
 		
@@ -403,10 +410,12 @@ sub calc_shear($$$$)
 			$sum_ush += $ush_vals[$gi][$vi];
 			$sum_vsh += $vsh_vals[$gi][$vi];
 			$sum_wsh += $wsh_vals[$gi][$vi];
+			$sum_esh += $LADCP{ENSEMBLE}[$ens_vals[$gi][$vi]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l;
 		}
 		$ush_mu[$gi] = $sh_n[$gi] ? $sum_ush/$sh_n[$gi] : nan;
 		$vsh_mu[$gi] = $sh_n[$gi] ? $sum_vsh/$sh_n[$gi] : nan;
 		$wsh_mu[$gi] = $sh_n[$gi] ? $sum_wsh/$sh_n[$gi] : nan;
+		$esh_mu[$gi] = $sh_n[$gi] ? $sum_esh/$sh_n[$gi] : nan;
 	}
 
 	for (my($gi)=0; $gi<@ush_vals; $gi++) {								# calc & grid stddevs

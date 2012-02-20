@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Sun Feb  5 12:28:54 2012
+#                    dlm: Sun Feb 19 22:37:57 2012
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 61 44 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 65 88 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'process LADCP data to get shear, time series';
@@ -59,6 +59,10 @@ $antsSummary = 'process LADCP data to get shear, time series';
 #				  - added $CTD{first_elapsed}
 #	Jul 27, 2011: - replaced ndata by nsamp
 #	Feb  5, 2012: - added profile max depth consistency check
+#	Feb 19, 2912: - added elapsed time to shear profile output
+#				  - replaced "nshear" output field by "nsamp"
+#				  - BUG: bottom of profiles was incorrect when dc max depth > uc max depth
+#				  - BUG: profile depth consistency check did not work for partial-depth yoyo casts
 
 ($ANTS) 	  = (`which list` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -205,18 +209,23 @@ for (my($r)=1; $r<@{$CTD{press}}; $r++) {
 print(STDERR "\n\t\t$pSpikes pressure spikes removed")
 	if ($pSpikes>0 && $opt_d);
 
-#------------------------------------
-# calculate w and find deepest record
-#------------------------------------
+#--------------------------------------------------
+# calculate w and find deepest & shallowest records
+#--------------------------------------------------
 $CTD{maxpress} = -9e99;
+$CTD{minpress} =  9e99;
 for (my($r)=1; $r<@{$CTD{press}}-1; $r++) {
 	$CTD{w}[$r] = 0.99*($CTD{press}[$r+1] - $CTD{press}[$r-1]) / (2*$CTD{sampint});
 	if ($CTD{press}[$r] > $CTD{maxpress}) {
 		$CTD{maxpress} = $CTD{press}[$r];
 		$CTD{atbottom} = $r;
     }										
+	if ($CTD{press}[$r] < $CTD{minpress}) {
+		$CTD{minpress} = $CTD{press}[$r];
+		$CTD{attop} = $r;
+    }										
 }
-printf(STDERR "\n\t\tmax pressure [%ddbar] at scan#%d",$CTD{maxpress},$CTD{atbottom})
+printf(STDERR "\n\t\tmin/max pressure [%d/%ddbar] at scans#%d/%d",$CTD{minpress},$CTD{maxpress},$CTD{attop},$CTD{atbottom})
 	if $opt_d;
 
 #----------------------------------------------------------------------
@@ -306,9 +315,9 @@ if ($opt_d) {
 
 print(STDERR "\n");
 
-croak(sprintf("$0: LADCP bottom depth (%dm) inconsistent with max CTD pressure (%ddbar)\n",
-		$LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH},$CTD{maxpress}))
-	if (abs($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}-$CTD{maxpress})/$CTD{maxpress} > 0.05);
+croak(sprintf("$0: LADCP profile depth range (%dm) inconsistent with max CTD pressure range (%ddbar)\n",
+		$LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH},$CTD{maxpress}-$CTD{minpress}))
+	if (abs($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}-($CTD{maxpress}-$CTD{minpress}))/($CTD{maxpress}-$CTD{minpress}) > 0.1);
 
 #----------------------------------------------------------------------
 # Step 5: Add CTD to LADCP Data & correct velocities for sound speed
@@ -501,6 +510,7 @@ calc_shear($LADCP_start,$LADCP_bottom,$GRID_DZ,1);					# calculate final gridded
 @dc_ush_mu = @ush_mu; @dc_ush_sig = @ush_sig;
 @dc_vsh_mu = @vsh_mu; @dc_vsh_sig = @vsh_sig;
 @dc_wsh_mu = @wsh_mu; @dc_wsh_sig = @wsh_sig;
+@dc_esh_mu = @esh_mu;
 
 print(STDERR "\n\tupcast...") if ($opt_d);
 edit_velocity($LADCP_end,$LADCP_bottom);							# upcast
@@ -511,28 +521,31 @@ calc_shear($LADCP_end,$LADCP_bottom,$GRID_DZ,1);
 @uc_ush_mu = @ush_mu; @uc_ush_sig = @ush_sig;
 @uc_vsh_mu = @vsh_mu; @uc_vsh_sig = @vsh_sig;
 @uc_wsh_mu = @wsh_mu; @uc_wsh_sig = @wsh_sig;
+@uc_esh_mu = @esh_mu;
 
 print(STDERR "\n\tcombined...") if ($opt_d);
-for (my($gi)=0; $gi<@dc_ush_mu; $gi++) {
-	if ($dc_sh_n[$gi]>0 && $uc_sh_n[$gi]>0) {
+my($nsh) = (@dc_ush_mu > @uc_ush_mu) ? scalar(@dc_ush_mu) : scalar(@uc_ush_mu);
+for (my($gi)=0; $gi<$nsh; $gi++) {
+	if (($gi<@dc_ush_mu&&$dc_sh_n[$gi]>0) && ($gi<@uc_ush_mu&&$uc_sh_n[$gi]>0)) {
 		$sh_n[$gi] = $dc_sh_n[$gi] + $uc_sh_n[$gi];
 		$ush_mu[$gi] = ($dc_sh_n[$gi]*$dc_ush_mu[$gi] + $uc_sh_n[$gi]*$uc_ush_mu[$gi]) / $sh_n[$gi];
 		$vsh_mu[$gi] = ($dc_sh_n[$gi]*$dc_vsh_mu[$gi] + $uc_sh_n[$gi]*$uc_vsh_mu[$gi]) / $sh_n[$gi];
 		$wsh_mu[$gi] = ($dc_sh_n[$gi]*$dc_wsh_mu[$gi] + $uc_sh_n[$gi]*$uc_wsh_mu[$gi]) / $sh_n[$gi];
+		$esh_mu[$gi] = ($dc_sh_n[$gi]*$dc_esh_mu[$gi] + $uc_sh_n[$gi]*$uc_esh_mu[$gi]) / $sh_n[$gi];
 		$ush_sig[$gi] = sqrt(($dc_sh_n[$gi]*$dc_ush_sig[$gi]**2 + $uc_sh_n[$gi]*$uc_ush_sig[$gi]**2) / $sh_n[$gi]);
 		$vsh_sig[$gi] = sqrt(($dc_sh_n[$gi]*$dc_vsh_sig[$gi]**2 + $uc_sh_n[$gi]*$uc_vsh_sig[$gi]**2) / $sh_n[$gi]);
 		$wsh_sig[$gi] = sqrt(($dc_sh_n[$gi]*$dc_wsh_sig[$gi]**2 + $uc_sh_n[$gi]*$uc_wsh_sig[$gi]**2) / $sh_n[$gi]);
-	} elsif ($dc_sh_n[$gi] > 0) {
+	} elsif ($gi < @dc_ush_mu && $dc_sh_n[$gi] > 0) {
 		$sh_n[$gi] = $dc_sh_n[$gi];
-		$ush_mu[$gi]  = $dc_ush_mu[$gi];  $vsh_mu[$gi]  = $dc_vsh_mu[$gi];  $wsh_mu[$gi]  = $dc_wsh_mu[$gi];
-		$ush_sig[$gi] = $dc_ush_sig[$gi]; $vsh_sig[$gi] = $dc_vsh_sig[$gi]; $wsh_sig[$gi] = $dc_wsh_sig[$gi];
-	} elsif ($uc_sh_n[$gi] > 0) {
+		$ush_mu[$gi]  = $dc_ush_mu[$gi];  $vsh_mu[$gi]  = $dc_vsh_mu[$gi];  $wsh_mu[$gi]  = $dc_wsh_mu[$gi];  $esh_mu[$gi]  = $dc_esh_mu[$gi];
+		$ush_sig[$gi] = $dc_ush_sig[$gi]; $vsh_sig[$gi] = $dc_vsh_sig[$gi]; $wsh_sig[$gi] = $dc_wsh_sig[$gi]; 
+	} elsif ($gi < @uc_ush_mu && $uc_sh_n[$gi] > 0) {
 		$sh_n[$gi] = $uc_sh_n[$gi];
-		$ush_mu[$gi]  = $uc_ush_mu[$gi];  $vsh_mu[$gi]  = $uc_vsh_mu[$gi];  $wsh_mu[$gi]  = $uc_wsh_mu[$gi];
-		$ush_sig[$gi] = $uc_ush_sig[$gi]; $vsh_sig[$gi] = $uc_vsh_sig[$gi]; $wsh_sig[$gi] = $uc_wsh_sig[$gi];
+		$ush_mu[$gi]  = $uc_ush_mu[$gi];  $vsh_mu[$gi]  = $uc_vsh_mu[$gi];  $wsh_mu[$gi]  = $uc_wsh_mu[$gi];  $esh_mu[$gi]  = $uc_esh_mu[$gi];
+		$ush_sig[$gi] = $uc_ush_sig[$gi]; $vsh_sig[$gi] = $uc_vsh_sig[$gi]; $wsh_sig[$gi] = $uc_wsh_sig[$gi]; 
 	} else {
 		$sh_n[$gi] = 0;
-		$ush_mu[$gi]  = $vsh_mu[$gi]  = $wsh_mu[$gi]  = nan;
+		$ush_mu[$gi]  = $vsh_mu[$gi]  = $wsh_mu[$gi]  = $esh_mu[$gi]  = nan;
 		$ush_sig[$gi] = $vsh_sig[$gi] = $wsh_sig[$gi] = nan;
 	}
 }
@@ -557,9 +570,9 @@ if (defined($opt_p)) {
 
 	print(STDERR "Writing shear profiles...");
 	
-	@antsNewLayout = ('depth','dc_nshear','dc_u_z','dc_u_z.sig','dc_v_z','dc_v_z.sig','dc_w_z','dc_w_z.sig',
-							  'uc_nshear','uc_u_z','uc_u_z.sig','uc_v_z','uc_v_z.sig','uc_w_z','uc_w_z.sig',
-							  'nshear','u_z','u_z.sig','v_z','v_z.sig','w_z','w_z.sig','Sv','Sv.n');
+	@antsNewLayout = ('depth','dc_elapsed','dc_nsamp','dc_u_z','dc_u_z.sig','dc_v_z','dc_v_z.sig','dc_w_z','dc_w_z.sig',
+							  'uc_elapsed','uc_nsamp','uc_u_z','uc_u_z.sig','uc_v_z','uc_v_z.sig','uc_w_z','uc_w_z.sig',
+							  'elapsed','nsamp','u_z','u_z.sig','v_z','v_z.sig','w_z','w_z.sig','Sv','Sv.n');
 							  
 	&antsOut('EOF');
     close(STDOUT);
@@ -567,17 +580,19 @@ if (defined($opt_p)) {
 
 	$antsCurParams = $fullParams;
 
-	for (my($gi)=0; $gi<@ush_mu; $gi++) {
+	for (my($gi)=0; $gi<$nsh; $gi++) {
 		&antsOut(depthOfGI($gi),										# depth in center of bin
-				 numberp($dc_sh_n[$gi])?$dc_sh_n[$gi]:0,				# downcast
+				 $dc_esh_mu[$gi],										# downcast
+				 numberp($dc_sh_n[$gi])?$dc_sh_n[$gi]:0,
 				 $dc_ush_mu[$gi],$dc_ush_sig[$gi],
 				 $dc_vsh_mu[$gi],$dc_vsh_sig[$gi],
 				 $dc_wsh_mu[$gi],$dc_wsh_sig[$gi],
-				 numberp($uc_sh_n[$gi])?$uc_sh_n[$gi]:0,				# upcast
+				 $uc_esh_mu[$gi],										# upcast
+				 numberp($uc_sh_n[$gi])?$uc_sh_n[$gi]:0,
 				 $uc_ush_mu[$gi],$uc_ush_sig[$gi],
 				 $uc_vsh_mu[$gi],$uc_vsh_sig[$gi],
 				 $uc_wsh_mu[$gi],$uc_wsh_sig[$gi],
-				 $sh_n[$gi],											# combined
+				 $esh_mu[$gi],$sh_n[$gi],								# combined
 				 $ush_mu[$gi],$ush_sig[$gi],
 				 $vsh_mu[$gi],$vsh_sig[$gi],
 				 $wsh_mu[$gi],$wsh_sig[$gi],

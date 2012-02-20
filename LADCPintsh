@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Wed Jul 27 18:51:49 2011
+#                    dlm: Sun Feb 19 22:49:28 2012
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 221 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 50 93 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -17,7 +17,9 @@ $antsSummary = 'integrate LADCP shear';
 #	  not been implemented (yet?)
 #	- low-pass-filtered shear code has not yet been implemented
 #	- currently, shear gaps are assumed to have vanishing shear;
-#	  better solutions are possible 
+#	  better solutions are possible
+#	- elapsed time is simply copied from shear elapsed time (i.e.
+#	  it is not interpolated onto the new depth grid)
 
 # WEIRDNESSES IN Eric's CODE:
 #	- in Eric's [avg_sh.m] the calculation of output shear stddev incorrectly assumes that the 4th column
@@ -43,6 +45,9 @@ $antsSummary = 'integrate LADCP shear';
 #				  - removed shear sigma output
 #				  - replaced ndata by nsamp
 #				  - removed -w (Eric's way of dealing with dc/uc temporal variability)
+#	Feb 19, 2012: - added processing of elapsed time
+#				  - adapted to new shear file layout (nsamp instead of nshear)
+#				  - BUG: uplooker data was not used for downcasts and and only partially for combo data
 
 ($ANTS) = (`which list` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
@@ -61,7 +66,6 @@ croak("$0: -m requires -b\n")
 
 &antsCardOpt(\$opt_n,10);	## minimum number of samples for shear
 &antsCardOpt(\$opt_m,10);	# minimum number of samples for BT data
-#&antsCardOpt(\$opt_s,20);	## minimum number of samples for smoothed shear
 
 &antsFileOpt($opt_b);		# BT file
 
@@ -86,33 +90,31 @@ sub wavg_sig(@)
 }
 	
 
-$depthF = fnr('depth');				# layout of [LADCPproc] output
-$dc_nshF = fnr('dc_nshear');
+$depthF = fnr('depth');									# layout of [LADCPproc] output
+$dc_nshF = fnrNoErr('dc_nshear');
+$dc_nshF = fnr('dc_nsamp') unless defined($dc_nshF);
 $dc_uzF  = fnr('dc_u_z');
 $dc_uzsF = fnrNoErr('dc_u_z.sig');
-$dc_uzsF = fnr('dc_u_z_sig')
-	unless defined($dc_uzsF);
+$dc_uzsF = fnr('dc_u_z_sig') unless defined($dc_uzsF);
 $dc_vzF  = fnr('dc_v_z');
 $dc_vzsF = fnrNoErr('dc_v_z.sig');
-$dc_vzsF = fnr('dc_v_z_sig')
-	unless defined($dc_vzsF);
+$dc_vzsF = fnr('dc_v_z_sig') unless defined($dc_vzsF);
 $dc_wzF  = fnr('dc_w_z');
 $dc_wzsF = fnrNoErr('dc_w_z.sig');
-$dc_wzsF = fnr('dc_w_z_sig')
-	unless defined($dc_wzsF);
-$uc_nshF = fnr('uc_nshear');
+$dc_wzsF = fnr('dc_w_z_sig') unless defined($dc_wzsF);
+$dc_elapsedF = fnr('dc_elapsed');
+$uc_nshF = fnrNoErr('uc_nshear');
+$uc_nshF = fnr('uc_nsamp') unless defined($uc_nshF);
 $uc_uzF  = fnr('uc_u_z');
 $uc_uzsF = fnrNoErr('uc_u_z.sig');
-$uc_uzsF = fnr('uc_u_z_sig')
-	unless defined($uc_uzsF);
+$uc_uzsF = fnr('uc_u_z_sig') unless defined($uc_uzsF);
 $uc_vzF  = fnr('uc_v_z');
 $uc_vzsF = fnrNoErr('uc_v_z.sig');
-$uc_vzsF = fnr('uc_v_z_sig')
-	unless defined($uc_vzsF);
+$uc_vzsF = fnr('uc_v_z_sig') unless defined($uc_vzsF);
 $uc_wzF  = fnr('uc_w_z');
 $uc_wzsF = fnrNoErr('uc_w_z.sig');
-$uc_wzsF = fnr('uc_w_z_sig')
-	unless defined($uc_wzsF);
+$uc_wzsF = fnr('uc_w_z_sig') unless defined($uc_wzsF);
+$uc_elapsedF = fnr('uc_elapsed');
 
 my(@gaps); my($curGap) = 0;
 
@@ -147,21 +149,24 @@ for (my($r)=0; &antsIn(); $r++) {
 		if ($dc_nsamp > 0) {								# downcast shear
 			my($DLf) = $ants_[0][$dc_nshF] / $dc_nsamp;
 			my($ULf) =      $UL_[$dc_nshF] / $dc_nsamp;
-			if ($DLf>0 && $Ulf>0) {
+			if ($DLf>0 && $ULf>0) {
 				$dc_uz[$r] = $DLf*$ants_[0][$dc_uzF] + $ULf*$UL_[$dc_uzF];
 				$dc_vz[$r] = $DLf*$ants_[0][$dc_vzF] + $ULf*$UL_[$dc_vzF];
 	            $dc_wz[$r] = $DLf*$ants_[0][$dc_wzF] + $ULf*$UL_[$dc_wzF];
+	            $dc_elapsed[$r] = $DLf*$ants_[0][$dc_elapsedF] + $ULf*$UL_[$dc_elapsedF];
 	        } elsif ($DLf > 0) {
 				$dc_uz[$r] = $ants_[0][$dc_uzF];
 				$dc_vz[$r] = $ants_[0][$dc_vzF];
 				$dc_wz[$r] = $ants_[0][$dc_wzF];
+				$dc_elapsed[$r] = $ants_[0][$dc_elapsedF];
 	        } else {
 				$dc_uz[$r] = $UL_[$dc_uzF];
 				$dc_vz[$r] = $UL_[$dc_vzF];
 				$dc_wz[$r] = $UL_[$dc_wzF];
+				$dc_elapsed[$r] = $UL_[$dc_elapsedF];
 	        }
 		} else {
-			$dc_uz[$r] = $dc_vz[$r] = $dc_wz[$r] = nan;
+			$dc_uz[$r] = $dc_vz[$r] = $dc_wz[$r] = $dc_elapsed[$r] = nan;
 	    }
 		if ($uc_nsamp > 0) {								# upcast shear
 			my($DLf) = $ants_[0][$uc_nshF] / $uc_nsamp;
@@ -170,32 +175,37 @@ for (my($r)=0; &antsIn(); $r++) {
 				$uc_uz[$r] = $DLf*$ants_[0][$uc_uzF] + $ULf*$UL_[$uc_uzF];
 				$uc_vz[$r] = $DLf*$ants_[0][$uc_vzF] + $ULf*$UL_[$uc_vzF];
 				$uc_wz[$r] = $DLf*$ants_[0][$uc_wzF] + $ULf*$UL_[$uc_wzF];
+				$uc_elapsed[$r] = $DLf*$ants_[0][$uc_elapsedF] + $ULf*$UL_[$uc_elapsedF];
 	        } elsif ($DLf > 0) {
 				$uc_uz[$r] = $ants_[0][$uc_uzF];
 				$uc_vz[$r] = $ants_[0][$uc_vzF];
 				$uc_wz[$r] = $ants_[0][$uc_wzF];
+				$uc_elapsed[$r] = $ants_[0][$uc_elapsedF];
 	        } else {
 				$uc_uz[$r] = $UL_[$uc_uzF];
 				$uc_vz[$r] = $UL_[$uc_vzF];
 				$uc_wz[$r] = $UL_[$uc_wzF];
+				$uc_elapsed[$r] = $UL_[$uc_elapsedF];
 	        }
 		} else {
-			$uc_uz[$r] = $uc_vz[$r] = $uc_wz[$r] = nan;
+			$uc_uz[$r] = $uc_vz[$r] = $uc_wz[$r] = $uc_elapsed[$r] = nan;
 	    }
 	} else {	# downlooker only
 		if ($dc_nsamp > 0) {							# downcast shear
 			$dc_uz[$r] = $ants_[0][$dc_uzF];
 			$dc_vz[$r] = $ants_[0][$dc_vzF];
 			$dc_wz[$r] = $ants_[0][$dc_wzF];
+			$dc_elapsed[$r] = $ants_[0][$dc_elapsedF];
 		} else {
-			$dc_uz[$r] = $dc_vz[$r] = $dc_wz[$r] = nan;
+			$dc_uz[$r] = $dc_vz[$r] = $dc_wz[$r] = $dc_elapsed[$r] = nan;
 	    }
 		if ($uc_nsamp > 0) {							# upcast shear
 			$uc_uz[$r] = $ants_[0][$uc_uzF];
 			$uc_vz[$r] = $ants_[0][$uc_vzF];
 			$uc_wz[$r] = $ants_[0][$uc_wzF];
+			$uc_elapsed[$r] = $ants_[0][$uc_elapsedF];
 		} else {
-			$uc_uz[$r] = $uc_vz[$r] = $uc_wz[$r] = nan;
+			$uc_uz[$r] = $uc_vz[$r] = $uc_wz[$r] = $uc_elapsed[$r] = nan;
 	    }
     }
     
@@ -206,17 +216,20 @@ for (my($r)=0; &antsIn(); $r++) {
 			$uz[$r] = $dcf*$dc_uz[$r] + $ucf*$uc_uz[$r];
 			$vz[$r] = $dcf*$dc_vz[$r] + $ucf*$uc_vz[$r];
             $wz[$r] = $dcf*$dc_wz[$r] + $ucf*$uc_wz[$r];
+            $elapsed[$r] = $dcf*$dc_elapsed[$r] + $ucf*$uc_elapsed[$r];
         } elsif ($dcf > 0) {
 			$uz[$r] = $dc_uz[$r];
 			$vz[$r] = $dc_vz[$r];
 			$wz[$r] = $dc_wz[$r];
+			$elapsed[$r] = $dc_elapsed[$r];
         } else {
 			$uz[$r] = $uc_uz[$r];
 			$vz[$r] = $uc_vz[$r];
 			$wz[$r] = $uc_wz[$r];
+			$elapsed[$r] = $uc_elapsed[$r];
         }
 	} else {
-		$uz[$r] = $vz[$r] = $wz[$r] = nan;
+		$uz[$r] = $vz[$r] = $wz[$r] = $elapsed[$r] = nan;
 	}
 
 	if (numberp($uz[$r]) && $curGap>0) {						# end of gap
@@ -490,15 +503,15 @@ printf(STDERR "X-Factor = %.1f\n",$X_Factor);
 # Output Velocity Profile
 #======================================================================
 
-@antsNewLayout = ('depth','u','v','w','nsamp',
-				  'dc_u','dc_v','dc_w','dc_nsamp',
-				  'uc_u','uc_v','uc_w','uc_nsamp');
+@antsNewLayout = ('depth','elapsed','u','v','w','nsamp',
+				  'dc_elapsed','dc_u','dc_v','dc_w','dc_nsamp',
+				  'uc_elapsed','uc_u','uc_v','uc_w','uc_nsamp');
 
 for (my($r)=0; $r<@depth; $r++) {
 	&antsOut($depth[$r]+$DZ/2,
-			 $u[$r],$v[$r],$w[$r],$nsamp[$r],
-			 $dc_u[$r],$dc_v[$r],$dc_w[$r],$dc_nsamp[$r],
-			 $uc_u[$r],$uc_v[$r],$uc_w[$r],$uc_nsamp[$r]);
+			 $elapsed[$r],$u[$r],$v[$r],$w[$r],$nsamp[$r],
+			 $dc_elapsed[$r],$dc_u[$r],$dc_v[$r],$dc_w[$r],$dc_nsamp[$r],
+			 $uc_elapsed[$r],$uc_u[$r],$uc_v[$r],$uc_w[$r],$uc_nsamp[$r]);
 }
 
 #======================================================================
@@ -506,16 +519,16 @@ for (my($r)=0; $r<@depth; $r++) {
 #======================================================================
 
 if (defined($opt_s)) {
-	@antsNewLayout = ('depth','u_z','v_z','w_z','u_z.sig','v_z.sig','w_z.sig','nsamp',
-							  'dc_u_z','dc_v_z','dc_w_z','dc_u_z.sig','dc_v_z.sig','dc_w_z.sig','dc_nsamp',
-							  'uc_u_z','uc_v_z','uc_w_z','uc_u_z.sig','uc_v_z.sig','uc_w_z.sig','uc_nsamp');
+	@antsNewLayout = ('depth','elapsed','u_z','v_z','w_z','u_z.sig','v_z.sig','w_z.sig','nsamp',
+							  'dc_elapsed','dc_u_z','dc_v_z','dc_w_z','dc_u_z.sig','dc_v_z.sig','dc_w_z.sig','dc_nsamp',
+							  'uc_elapsed','uc_u_z','uc_v_z','uc_w_z','uc_u_z.sig','uc_v_z.sig','uc_w_z.sig','uc_nsamp');
 	&antsOut('EOF');
     close(STDOUT);
 	open(STDOUT,">$opt_s") || croak("$opt_s: $!\n");
 	for (my($r)=0; $r<@depth; $r++) {
-		&antsOut($depth[$r],$uz[$r],$vz[$r],$wz[$r],$uzsig[$r],$vzsig[$r],$wzsig[$r],$nsamp[$r],
-			     $dc_uz[$r],$dc_vz[$r],$dc_wz[$r],$dc_uzsig[$r],$dc_vzsig[$r],$dc_wzsig[$r],$dc_nsamp[$r],
-			     $uc_uz[$r],$uc_vz[$r],$uc_wz[$r],$uc_uzsig[$r],$uc_vzsig[$r],$uc_wzsig[$r],$uc_nsamp[$r]);
+		&antsOut($depth[$r],$elapsed[$r],$uz[$r],$vz[$r],$wz[$r],$uzsig[$r],$vzsig[$r],$wzsig[$r],$nsamp[$r],
+			     $dc_elapsed[$r],$dc_uz[$r],$dc_vz[$r],$dc_wz[$r],$dc_uzsig[$r],$dc_vzsig[$r],$dc_wzsig[$r],$dc_nsamp[$r],
+			     $uc_elapsed[$r],$uc_uz[$r],$uc_vz[$r],$uc_wz[$r],$uc_uzsig[$r],$uc_vzsig[$r],$uc_wzsig[$r],$uc_nsamp[$r]);
 	}
 }
 
