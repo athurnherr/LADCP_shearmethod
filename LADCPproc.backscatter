@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B A C K S C A T T E R 
 #                    doc: Wed Oct 20 13:02:27 2010
-#                    dlm: Fri Jul 15 11:39:37 2011
+#                    dlm: Tue Apr 10 13:46:28 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 106 65 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 52 59 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -15,12 +15,45 @@
 #	Jul  7, 2011: - use $BEAM? vars to clarify code
 #				  - save SV values to use in BT code
 #	Jul 14, 2011: - implemented Sv_V04
-#	Jul 15, 2011: - modified Sv_V04 to take noise levels into account
+#	Jul 15, 2011: - modified Sv_V04 to take noise levels into account (Sv_T11)
+#	Apr 10, 2012: - BUG: ensonified volume in Sv_T11 was wrong
 
 my($BEAM1) = 0;
 my($BEAM2) = 1;
 my($BEAM3) = 2;
 my($BEAM4) = 3;
+
+#----------------------------------------------------------------------
+# Volume Scattering Coefficient
+#
+# 1) There are currently 4 different methods for correcting echo
+#	 amplitudes as a function of range. The method to calculate Sv
+#    of Deines (1999) is the only published one, although Visbeck's
+#    correction was presumably used by Visbeck and Thurnherr (2009).
+# 	 The third method (Thurnherr 2011) improves on Visbeck's code.
+#	 The fourth method consists in no correction.
+# 2) The following observations stand out when plotting echo amplitudes
+#	 against bin number in clear water (e.g. below 1400m in first
+#	 downcast of IWISE yoyo cast 160; [Documentation/Sv_comparison.eps]):
+#		- the corrections works approximately for the valid bins
+#		  (2-13 in case of IWISE) but it amounts to a slight
+#		  overcorrection, i.e. the resulting corrected backscatter
+#		  profiles increase with increasing distance from the
+#		  transducer
+#		- in terms of remaining vertical structure, the different
+#		  methods are nearly identical
+#		- however, Visbeck (2004) shows fairly large instrument
+#		  dependent biases because (instrument-specific) noise
+#		  is not considered
+#		- the vertical structure can be improved by decreasing the
+#		  attenuation parameter to something like 0.05; I have
+#		  verified this for the Deines and Thurnherr expressions
+#		  with a single IWISE station; however, there remain
+#		  small (but noticeable) instrument-specific biases
+#	3) Therefore, the default code is Deines (1999); if this is
+#	   not good enough, it is probably possible to derive an
+#	   empirical correction from in-situ data.
+#----------------------------------------------------------------------
 
 #----------------------------------------------------------------------
 # Volume Scattering Coefficient, following Deines (IEEE 1999)
@@ -29,14 +62,13 @@ my($BEAM4) = 3;
 #   - no sound-speed correction applied
 #   - R in bin center, instead of last quarter
 #   - transmit power assumes 33V batteries
-#----------------------------------------------------------------------
-
-# NB:
+# Results:
 #	- correction seems to work for a subset of bins (~bins 3-9 for 
 #	  2010 P403 station 46) 
 #	- this may imply that noise level depends on bin
 # 	- far bins are important for seabed detection, i.e. cannot simply
 #	  be discarded at this stage
+#----------------------------------------------------------------------
 
 sub log10 {
     my $n = shift;
@@ -50,6 +82,7 @@ sub Sv_D99($$$$$)
     my($Ldbm)   = 10 * log10($PL);
     my($PdbW)   = 14.0;
     my($alpha)  = 0.069;
+#    my($alpha)  = 0.048;
     my($Kc)     = 0.45;
     
     return $C + 10*log10(($temp+273)*$R**2) - $Ldbm - $PdbW
@@ -68,11 +101,12 @@ sub Sv_D99($$$$$)
 ## $EAS = source level
 ## $ap = aperature in degree
 ## M. Visbeck 2004
-
-# NB:
+#
+# Results:
 #	- overall, correction with distance works similarly well to Deines (1999)
 #	- constant bias, which could be taken care of by changing EAS
-#	- however, much more serious UL/DL differences
+#	- however, much more serious UL/DL differences than Deines (1999)
+#----------------------------------------------------------------------
 
 sub Sv_V04($$$$$)
 {
@@ -80,6 +114,7 @@ sub Sv_V04($$$$$)
 
 #	my($alpha) = 0.039;		## attenuation dB/m for 150 kHz
 	my($alpha) = 0.062;		## attenuation dB/m for 300 kHz
+	
 	my($EAS) = 100;			## source level in dB
 	my($ap) = rad(2);		## beam aperature in DEGREE convert to radian
 
@@ -96,34 +131,59 @@ sub Sv_V04($$$$$)
 }
 
 
-# modifications from Visbeck:
-#	- add 0.05 to beam radius
-#	- take beam noise into account
-#	- corrected(?) ensonified volume
-
-# NB:
-#	- beam noise takes care of UL/DL differences
-#	- constant bias, which could be taken care of by changing EAS
-#	- remaining changes don't do much
+#----------------------------------------------------------------------
+# Volume Scattering Coefficient, Thurnherr [2011]
+#
+# in an attempt to improved on Visbeck's code, I made several
+# modifications:
+#	- add 5cm to beam radius (transducer radius)
+#	- take beam noise into account (as in Deines [1999])
+#	- use different equation for ensonified volume
+# results:
+#	- inclusion of beam noise greatly reduces UL/DL differences in IWISE data
+#	- constant offset from Deines values, which could be taken care of by changing EAS
+#	- remaining changes don't have great effects
+#----------------------------------------------------------------------
 
 sub Sv_T11($$$$$)
 {
     my($temp,$PL,$Er,$R,$EA) = @_;
 
-	my($alpha) = 0.062;		## attenuation dB/m for 300 kHz
-	my($EAS) = 100;			## source level in dB
-	my($ap) = rad(2);		## beam aperature in DEGREE convert to radian
+#	my($alpha) = 0.067;				# Deines [1999]
+	my($alpha) = 0.062;				# Visbeck [2004]
+#	my($alpha) = 0.048;				# attenuation dB/m for 300 kHz
+	my($EAS) = 100;					# source level in dB
+	my($ap) = rad(2);				# beam aperature in DEGREE convert to radian
+	my($r0) = 0.05;					# beam radius at source (transducer radius)
 
-	my($r1) = 0.05 + tan($ap)*($R-$PL/2);	## radius of top and bottom of each bin
-	my($r2) = 0.05 + tan($ap)*($R+$PL/2);
-	my($V) = $PI*($r1**2+$r2**2)/2 * $PL;	## ensonified volume 
+	my($d1) = $R - $PL/2;			# distance to top and bottom of bin
+	my($d2) = $R + $PL/2;
+	my($r1) = $r0 + $d1*tan($ap);	# radius of top and bottom of each bin
+	my($r2) = $r0 + $d2*tan($ap);
+	
+	my($V) = $PI/3 * ($d2*$r2**2 - $d1*$r1**2);	# ensonified volume
 
-	my($TL) = 20*log10($R) + $alpha*$R;		## transmission loss
+	my($TL) = 20*log10($R) + $alpha*$R;		# transmission loss
 
-	my($TS) = 0.45*($EA-$Er) - $EAS + 2*$TL - 10*log10($V);	## target strength
+	my($TS) = 0.45*($EA-$Er) - $EAS + 2*$TL - 10*log10($V);	# target strength
 
 	return $TS;
 }
+
+#----------------------------------------------------------------------
+# no correction for attenuation losses
+#
+# however, noise level is still taken into consideration
+#----------------------------------------------------------------------
+
+sub Sv_nocorr($$$$$)
+{
+    my($temp,$PL,$Er,$R,$EA) = @_;
+
+	return 0.45*($EA-$Er);
+}
+
+#======================================================================
 
 sub mk_backscatter_profs($$)
 {
@@ -153,8 +213,10 @@ sub mk_backscatter_profs($$)
 				$Svfunc = \&Sv_D99;
 			} elsif ($opt_u =~ /^[vV]/) {
 				$Svfunc = \&Sv_V04;
-			} else {
+			} elsif ($opt_u =~ /^[tT]/) {
 				$Svfunc = \&Sv_T11;
+			} else {
+				$Svfunc = \&Sv_nocorr;
 			}
 
 			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM1] = &$Svfunc($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},

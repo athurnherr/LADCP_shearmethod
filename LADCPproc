@@ -2,19 +2,17 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Sun Feb 19 22:37:57 2012
-#                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 65 88 NIL 0 0 72 2 2 4 NIL ofnI
+#                    dlm: Tue Apr 10 20:29:36 2012
+#                    (c) 2010 A.M. Thurnherr
+#                    uE-Info: 65 64 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'process LADCP data to get shear, time series';
 
 # NOTES:
 #	- the shear-method editing in this code is based on Eric Firing's merge.c
-#	- there are three different codes for estimating acoustic backscatter coefficients:
-#		- one based on Deines (1999)
-#		- one based on Visbeck (2004) getbtrack.m
-#		- my own, slightly modified from Visbeck (2004)
+#	- as described in [LADCPproc.backscatter], there are three different codes 
+#	  for correcting echo amplitudes for attenuation loss & beam spreading
 #	- comments starting with ## are taken verbatim from the original implementations
 #	- the basic idea of the time lagging implemented in this code is similar
 #	  to the one implemented in Martin Visbeck's bestlag.m
@@ -63,6 +61,8 @@ $antsSummary = 'process LADCP data to get shear, time series';
 #				  - replaced "nshear" output field by "nsamp"
 #				  - BUG: bottom of profiles was incorrect when dc max depth > uc max depth
 #				  - BUG: profile depth consistency check did not work for partial-depth yoyo casts
+#	Apr 10, 2012: - changed default backscatter correction to Deines (1999)
+#				  - improved and relaxed depth consistency check
 
 ($ANTS) 	  = (`which list` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -90,7 +90,7 @@ $antsParseHeader = 0;
 	'[-o)utput grid <resolution[5m]>]',
 	'[-i)nitial LADCP time lag <guestimate>]',
 	'[-l)ag LADCP <by>] [auto-lag -w)indow <size[120s]>] [-n) <auto-lag windows[20]]',
-	'[-u)se D[eines99]|V[isbeck04][|T[hurnherr11]]',
+	'[correct echo amplitude -u)sing D[eines99]|V[isbeck04]|T[hurnherr11]|n[ocorr]',
 	'[-d)iagnostic screen output]',
 	'output: [shear-p)rofile <file>] [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
 	'        [-a)coustic backscatter <dts-file] [bottom-trac-k) profs]',
@@ -111,9 +111,9 @@ $RDI_Coords::minValidVels = 4 if ($opt_4);
 
 if (defined($opt_u)) {
 	croak("$0: cannot decode -u $opt_u\n")
-		unless ($opt_u =~ /^[dDvVtT]/);
+		unless ($opt_u =~ /^[dDvVtTn]/);
 } else {
-	$opt_u = 'Thurnherr11';
+	$opt_u = 'Deines99';
 }
 
 if (defined($opt_g)) {
@@ -315,9 +315,11 @@ if ($opt_d) {
 
 print(STDERR "\n");
 
+my($LADCP_prof_range) = $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH} -
+							min($LADCP{ENSEMBLE}[$LADCP_start]->{DEPTH},$LADCP{ENSEMBLE}[$LADCP_end]->{DEPTH});
 croak(sprintf("$0: LADCP profile depth range (%dm) inconsistent with max CTD pressure range (%ddbar)\n",
-		$LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH},$CTD{maxpress}-$CTD{minpress}))
-	if (abs($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}-($CTD{maxpress}-$CTD{minpress}))/($CTD{maxpress}-$CTD{minpress}) > 0.1);
+		$LADCP_prof_range,$CTD{maxpress}-$CTD{minpress}))
+	if (abs($LADCP_prof_range-($CTD{maxpress}-$CTD{minpress}))/(0.99*($CTD{maxpress}-$CTD{minpress})) > 0.2);
 
 #----------------------------------------------------------------------
 # Step 5: Add CTD to LADCP Data & correct velocities for sound speed
