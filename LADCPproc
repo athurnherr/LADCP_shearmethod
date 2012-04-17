@@ -2,69 +2,73 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Tue Apr 10 20:29:36 2012
+#                    dlm: Tue Apr 17 18:14:06 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 65 64 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 69 93 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'process LADCP data to get shear, time series';
 
 # NOTES:
-#	- the shear-method editing in this code is based on Eric Firing's merge.c
-#	- as described in [LADCPproc.backscatter], there are three different codes 
-#	  for correcting echo amplitudes for attenuation loss & beam spreading
-#	- comments starting with ## are taken verbatim from the original implementations
-#	- the basic idea of the time lagging implemented in this code is similar
-#	  to the one implemented in Martin Visbeck's bestlag.m
-#	- for SeaBird files:
-#		- CTD elapsed time is estimated from recno * CTD{sampint}
-#		- first elapsed time is added on output
-#	- output elapsed time is from CTD to allow yoyo processing without loss of
-#	  time information
-#	- CTD{elapsed} is undefined for records before instrument is in the water
-#	- ITS-90 temp field in degC required
-#	- salin field prequired
-#	- pressure field in dbar required
-#	- -i should be set to the number that's added to LADCP_elapsed to make the two
-#	  time series overplot nicely
+#   - the shear-method editing in this code is based on Eric Firing's merge.c
+#   - as described in [LADCPproc.backscatter], there are three different codes 
+#     for correcting echo amplitudes for attenuation loss & beam spreading
+#   - comments starting with ## are taken verbatim from the original implementations
+#   - the basic idea of the time lagging implemented in this code is similar
+#     to the one implemented in Martin Visbeck's bestlag.m
+#   - for SeaBird files:
+#       - CTD elapsed time is estimated from recno * CTD{sampint}
+#       - first elapsed time is added on output
+#   - output elapsed time is from CTD to allow yoyo processing without loss of
+#     time information
+#   - CTD{elapsed} is undefined for records before instrument is in the water
+#   - ITS-90 temp field in degC required
+#   - salin field prequired
+#   - pressure field in dbar required
+#   - -i should be set to the number that's added to LADCP_elapsed to make the two
+#     time series overplot nicely
 
 # HISTORY:
-#	Sep 16, 2010: - incepted
-#	Oct 13, 2010: - first working version
-#	Oct 14, 2010: - renamed from LADCPshear
-#	Oct 19, 2010: - added -a)coustic backscatter profiles
-#	Oct 20, 2010: - added -2)dary CTD sensors
-#	Oct 23, 2010: - added magnetic-declination correction
-#	Oct 26, 2010: - added tilt calculation
-#	Dec  9, 2010: - added support for ASCII CTD files
-#	Dec 10, 2010: - change -w) default to 120s
-#				  - changed nshear output to 0 from nan when there are no samples
-#	Dec 27, 2010: - changed sign of -l to accept lag output from [LADCP_w]
-#	Jan 10, 2011: - -o => -k added new -o
-#				  - added code to fill CTD sound vel gaps
-#	Jan 22, 2011: - added -g) lat,lon
-#				  - added -c)ompass corr
-#	Jun 15, 2011: - added mean backscatter profile to default output
-#	Jul  7, 2011: - added support for $BT_* processing parameters
-#				  - replaced old per-bin acoustic backscatter profile output by
-#					acoustic backscatter depth-time-series
-#				  - disabled seabed and acoustic backscatter code when not required (e.g. UL)
-#				  - made non-diagnostic output terser
-#	Jul 11, 2011: - changed default output to .tds and added -p)rofile option
-#	Jul 14, 2011: - added -u)se D[eines1999][V[isbeck2004]]
-#	Jul 15, 2011: - changed output bin# to 1-based in -a output
-#				  - added T[hurnherr11] -u)se option
-#				  - added $CTD{first_elapsed}
-#	Jul 27, 2011: - replaced ndata by nsamp
-#	Feb  5, 2012: - added profile max depth consistency check
-#	Feb 19, 2912: - added elapsed time to shear profile output
-#				  - replaced "nshear" output field by "nsamp"
-#				  - BUG: bottom of profiles was incorrect when dc max depth > uc max depth
-#				  - BUG: profile depth consistency check did not work for partial-depth yoyo casts
-#	Apr 10, 2012: - changed default backscatter correction to Deines (1999)
-#				  - improved and relaxed depth consistency check
+#   Sep 16, 2010: - incepted
+#   Oct 13, 2010: - first working version
+#   Oct 14, 2010: - renamed from LADCPshear
+#   Oct 19, 2010: - added -a)coustic backscatter profiles
+#   Oct 20, 2010: - added -2)dary CTD sensors
+#   Oct 23, 2010: - added magnetic-declination correction
+#   Oct 26, 2010: - added tilt calculation
+#   Dec  9, 2010: - added support for ASCII CTD files
+#   Dec 10, 2010: - change -w) default to 120s
+#                 - changed nshear output to 0 from nan when there are no samples
+#   Dec 27, 2010: - changed sign of -l to accept lag output from [LADCP_w]
+#   Jan 10, 2011: - -o => -k added new -o
+#                 - added code to fill CTD sound vel gaps
+#   Jan 22, 2011: - added -g) lat,lon
+#                 - added -c)ompass corr
+#   Jun 15, 2011: - added mean backscatter profile to default output
+#   Jul  7, 2011: - added support for $BT_* processing parameters
+#                 - replaced old per-bin acoustic backscatter profile output by
+#                   acoustic backscatter depth-time-series
+#                 - disabled seabed and acoustic backscatter code when not required (e.g. UL)
+#                 - made non-diagnostic output terser
+#   Jul 11, 2011: - changed default output to .tds and added -p)rofile option
+#   Jul 14, 2011: - added -u)se D[eines1999][V[isbeck2004]]
+#   Jul 15, 2011: - changed output bin# to 1-based in -a output
+#                 - added T[hurnherr11] -u)se option
+#                 - added $CTD{first_elapsed}
+#   Jul 27, 2011: - replaced ndata by nsamp
+#   Feb  5, 2012: - added profile max depth consistency check
+#   Feb 19, 2912: - added elapsed time to shear profile output
+#                 - replaced "nshear" output field by "nsamp"
+#                 - BUG: bottom of profiles was incorrect when dc max depth > uc max depth
+#                 - BUG: profile depth consistency check did not work for partial-depth yoyo casts
+#   Apr 10, 2012: - changed default backscatter correction to Deines (1999)
+#                 - improved and relaxed depth consistency check
+#   Apr 11, 2012: - BUG: double comma that did not affect the output
+#                 - BUG: code had assumed, but not ensured, that first CTD scan is valid
+#   Apr 13, 2012: - removed -s argument from dependencies
+#	Apr 17, 2012: - BAD BUG: magdec code call was bad and did not return correct value. ever.
 
-($ANTS) 	  = (`which list` =~ m{^(.*)/[^/]*$});
+($ANTS)       = (`which list` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
 ($LADCPPROC)  = ($0 =~ m{^(.*)/[^/]*$});
 
@@ -82,54 +86,54 @@ require "$PERL_TOOLS/RDI_Utils.pl";
 
 $antsParseHeader = 0;
 &antsUsage('24a:b:c:df:g:i:kl:n:o:p:s:t:u:w:',2,
-	'[use -2)dary CTD sensor pair]',
-	'[require -4)-beam LADCP solutions]',
-	'[-s)etup <file>] [-g)ps <lat,lon>]',
-	'[-c)ompass-corr <offset,cos-fac,sin-fac>]',
-	'[enable -p)PI editing]',
-	'[-o)utput grid <resolution[5m]>]',
-	'[-i)nitial LADCP time lag <guestimate>]',
-	'[-l)ag LADCP <by>] [auto-lag -w)indow <size[120s]>] [-n) <auto-lag windows[20]]',
-	'[correct echo amplitude -u)sing D[eines99]|V[isbeck04]|T[hurnherr11]|n[ocorr]',
-	'[-d)iagnostic screen output]',
-	'output: [shear-p)rofile <file>] [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
-	'        [-a)coustic backscatter <dts-file] [bottom-trac-k) profs]',
-	'<RDI file> <SeaBird file>');
+    '[use -2)dary CTD sensor pair]',
+    '[require -4)-beam LADCP solutions]',
+    '[-s)etup <file>] [-g)ps <lat,lon>]',
+    '[-c)ompass-corr <offset,cos-fac,sin-fac>]',
+    '[enable -p)PI editing]',
+    '[-o)utput grid <resolution[5m]>]',
+    '[-i)nitial LADCP time lag <guestimate>]',
+    '[-l)ag LADCP <by>] [auto-lag -w)indow <size[120s]>] [-n) <auto-lag windows[20]]',
+    '[correct echo amplitude -u)sing D[eines99]|V[isbeck04]|T[hurnherr11]|n[ocorr]',
+    '[-d)iagnostic screen output]',
+    'output: [shear-p)rofile <file>] [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
+    '        [-a)coustic backscatter <dts-file] [bottom-trac-k) profs]',
+    '<RDI file> <SeaBird file>');
 
 $RDI_Coords::minValidVels = 4 if ($opt_4);
 
 &antsFloatOpt($opt_l);
 &antsCardOpt(\$opt_w,120);
-	# old default of -w 30 does not work if there are significant ambiguity-velocity
-	# problems, as is the case, e.g., with 2010_DIMES_US2 station 142
-	# old default of -w 60 did not work for DIMES_UK2 station 4 (DL), possibly again
-	# related to ambiguity velocity
+    # old default of -w 30 does not work if there are significant ambiguity-velocity
+    # problems, as is the case, e.g., with 2010_DIMES_US2 station 142
+    # old default of -w 60 did not work for DIMES_UK2 station 4 (DL), possibly again
+    # related to ambiguity velocity
 &antsCardOpt(\$opt_n,20);
-&antsFileOpt($opt_s);
+#&antsFileOpt($opt_s);      # DON'T, AS THIS WILL ADD AN UNWANTED DEPENDCY
 &antsFloatOpt($opt_i);
 &antsCardOpt(\$opt_o,5);
 
 if (defined($opt_u)) {
-	croak("$0: cannot decode -u $opt_u\n")
-		unless ($opt_u =~ /^[dDvVtTn]/);
+    croak("$0: cannot decode -u $opt_u\n")
+        unless ($opt_u =~ /^[dDvVtTn]/);
 } else {
-	$opt_u = 'Deines99';
+    $opt_u = 'Deines99';
 }
 
 if (defined($opt_g)) {
-	($CTD{lat},$CTD{lon}) = split(',',$opt_g);
-	croak("$0: cannot decode -g $opt_g\n")
-		unless numberp($CTD{lat}) && numberp($CTD{lon});
+    ($CTD{lat},$CTD{lon}) = split(',',$opt_g);
+    croak("$0: cannot decode -g $opt_g\n")
+        unless numberp($CTD{lat}) && numberp($CTD{lon});
 }
 
 if (defined($opt_c)) {
-	($CC_offset,$CC_cos_fac,$CC_sin_fac) = split(',',$opt_c);
-	croak("$0: cannot decode -c $opt_c\n")
-		unless numberp($CC_offset) && numberp($CC_cos_fac) && numberp($CC_sin_fac);
+    ($CC_offset,$CC_cos_fac,$CC_sin_fac) = split(',',$opt_c);
+    croak("$0: cannot decode -c $opt_c\n")
+        unless numberp($CC_offset) && numberp($CC_cos_fac) && numberp($CC_sin_fac);
 }
-	
+    
 $LADCP_file = &antsFileArg();
-$CTD_file 	= &antsFileArg();
+$CTD_file   = &antsFileArg();
 
 &antsAddParams('LADCP_file',$LADCP_file,'CTD_file',$CTD_file);
 &antsActivateOut();
@@ -153,34 +157,24 @@ printf(STDERR "\tloading $LADCPPROC/LADCPproc.defaults...\n");
 require "$LADCPPROC/LADCPproc.defaults";
 
 if (defined($opt_s)) {
-	print(STDERR "\tloading $opt_s...\n");
-	require $opt_s;
+    print(STDERR "\tloading $opt_s...\n");
+    require $opt_s;
 }
 
 if ($LADCP{BLANKING_DISTANCE} == 0) {
-	print(STDERR "\t\tBLANKING_DISTANCE == 0 => excluding all data from bin 1\n")
-		if ($opt_d);
-	$wbin_start = 2 unless ($wbin_start > 2);
-	$ubin_start = 2 unless ($ubin_start > 2);
-	$shbin_start = 2 unless ($shbin_start > 2);
-	$BT_bin_start = 2 unless ($BT_bin_start > 2);
+    print(STDERR "\t\tBLANKING_DISTANCE == 0 => excluding all data from bin 1\n")
+        if ($opt_d);
+    $wbin_start = 2 unless ($wbin_start > 2);
+    $ubin_start = 2 unless ($ubin_start > 2);
+    $shbin_start = 2 unless ($shbin_start > 2);
+    $BT_bin_start = 2 unless ($BT_bin_start > 2);
 }
 
 &antsAddParams('ADCP_orientation',
-		$LADCP{ENSEMBLE}[0]->{XDUCER_FACING_UP} ? 'uplooker' : 'downlooker');
+        $LADCP{ENSEMBLE}[0]->{XDUCER_FACING_UP} ? 'uplooker' : 'downlooker');
 
 $SHEAR_PREGRID_DZ = 20;
 $GRID_DZ = $opt_o;
-
-my($year)  = substr($LADCP{ENSEMBLE}[0]->{DATE},6,4);
-my($month) = substr($LADCP{ENSEMBLE}[0]->{DATE},0,2);
-my($dau  ) = substr($LADCP{ENSEMBLE}[0]->{DATE},3,2);
-my($magdec,$maginc,$h_strength,$v_strength) = split('\s+',`magdec $CTD{lon} $CTD{lat} $year $month $day`);
-
-croak("$0: unknown magnetic declination\n")
-	unless defined($magdec);
-
-&antsAddParams('magnetic_declination',$magdec);
 
 #----------------------------------------------------------------------
 # Step 3: Read CTD data
@@ -190,6 +184,16 @@ print(STDERR "Reading CTD data ($CTD_file)...");
 readCTD($CTD_file,\%CTD);
 printf(STDERR "\n\t%d scans",scalar(@{$CTD{press}})) if ($opt_d);
 print(STDERR "\n");
+
+my($year)  = substr($LADCP{ENSEMBLE}[0]->{DATE},6,4);
+my($month) = substr($LADCP{ENSEMBLE}[0]->{DATE},0,2);
+my($day  ) = substr($LADCP{ENSEMBLE}[0]->{DATE},3,2);
+my($magdec,$maginc,$h_strength,$v_strength) = split('\s+',`magdec $CTD{lon} $CTD{lat} $year $month $day`);
+
+croak("$0: unknown magnetic declination\n")
+	unless defined($magdec);
+
+&antsAddParams('magnetic_declination',$magdec);
 
 #----------------------------------------------------------------------
 # Step 4: Pre-Process CTD & LADCP Data
@@ -201,17 +205,31 @@ printf(STDERR "\n\tCTD...") if ($opt_d);
 #------------------------
 # clean CTD pressure data
 #------------------------
+
 my($pSpikes) = 0;
 for (my($r)=1; $r<@{$CTD{press}}; $r++) {
 	$pSpikes++,$CTD{press}[$r]=nan
 		if (abs($CTD{press}[$r]-$CTD{press}[$r-1])/$CTD{sampint} > 2);
 }
-print(STDERR "\n\t\t$pSpikes pressure spikes removed")
+print(STDERR "\n\t\t$pSpikes CTD pressure spikes removed")
 	if ($pSpikes>0 && $opt_d);
+
+#-----------------------------------
+# trim "preamble" without valid data
+#-----------------------------------
+
+my($r) = 0;
+until (numberp($CTD{press}[$r]) && numberp($CTD{temp}[$r]) && numberp($CTD{salin}[$r])) { $r++ }
+splice(@{$CTD{press}},0,$r);
+splice(@{$CTD{temp}},0,$r);
+splice(@{$CTD{salin}},0,$r);
+print(STDERR "\n\t\t$r leading CTD scans without valid data removed")
+	if ($r>0 && $opt_d);
 
 #--------------------------------------------------
 # calculate w and find deepest & shallowest records
 #--------------------------------------------------
+
 $CTD{maxpress} = -9e99;
 $CTD{minpress} =  9e99;
 for (my($r)=1; $r<@{$CTD{press}}-1; $r++) {
@@ -225,7 +243,8 @@ for (my($r)=1; $r<@{$CTD{press}}-1; $r++) {
 		$CTD{attop} = $r;
     }										
 }
-printf(STDERR "\n\t\tmin/max pressure [%d/%ddbar] at scans#%d/%d",$CTD{minpress},$CTD{maxpress},$CTD{attop},$CTD{atbottom})
+printf(STDERR "\n\t\tmin/max pressure [%d/%ddbar] at scans#%d/%d",
+					$CTD{minpress},$CTD{maxpress},$CTD{attop},$CTD{atbottom})
 	if $opt_d;
 
 #----------------------------------------------------------------------
@@ -373,7 +392,7 @@ for (my($min_depth)=9e99,my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
     }
 }
 
-&antsAddParams('top_depth',,round($LADCP{ENSEMBLE}[$LADCP_top]->{DEPTH}),
+&antsAddParams('top_depth',round($LADCP{ENSEMBLE}[$LADCP_top]->{DEPTH}),
 			   'bottom_depth',round($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}),
 			   'start_date',$LADCP{ENSEMBLE}[$LADCP_start]->{DATE},
 			   'start_time',$LADCP{ENSEMBLE}[$LADCP_start]->{TIME},

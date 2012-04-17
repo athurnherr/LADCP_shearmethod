@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . L O A D C T D 
 #                    doc: Thu Dec  9 18:39:01 2010
-#                    dlm: Sun Feb  5 12:40:11 2012
+#                    dlm: Tue Apr 17 18:10:38 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 16 78 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 18 27 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -14,6 +14,8 @@
 #	Jan 22, 2011: - adapted to new -g
 #	Jul 15, 2011: - added $CTD{first_elapsed}
 #	Feb  5, 2012: - BUG: ASCII file did not deal with leading spaces correctly
+#	Apr 11, 2012: - BUG: ASCII file did not handle nan latlons correctly
+#	Apr 17, 2012: - fiddled
 
 sub readCTD_ASCII($$)
 {
@@ -39,10 +41,12 @@ sub readCTD_ASCII($$)
 		push(@{$dtaR->{press}},($rec[$CTD_ASCII_press_field-1] == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_press_field-1]);
 		push(@{$dtaR->{temp}}, ($rec[$CTD_ASCII_temp_field-1]  == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_temp_field-1]);
 		push(@{$dtaR->{salin}},($rec[$CTD_ASCII_salin_field-1] == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_salin_field-1]);
-		unless (!defined($CTD_ASCII_lat_field) || $rec[$CTD_ASCII_lat_field-1] == $CTD_ASCII_badval) {
-			$nPos++;
-			$sumLat += $rec[$CTD_ASCII_lat_field-1];
-			$sumLon += $rec[$CTD_ASCII_lon_field-1];
+		if (defined($CTD_ASCII_lat_field) &&
+		    numberp($rec[$CTD_ASCII_lat_field-1]) &&
+			$rec[$CTD_ASCII_lat_field-1] != $CTD_ASCII_badval) {
+				$nPos++;
+				$sumLat += $rec[$CTD_ASCII_lat_field-1];
+				$sumLon += $rec[$CTD_ASCII_lon_field-1];
 		}
 	}
 	close(F);

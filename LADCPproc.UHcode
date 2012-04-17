@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . U H C O D E 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Sun Feb 19 21:05:16 2012
+#                    dlm: Wed Apr 11 19:22:44 2012
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 413 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 38 46 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from Eric's [merge.c]; with mods
@@ -12,9 +12,9 @@
 #	- velocity integration removed
 #	- percent-good flag removed (no point for single-ping ensembles)
 #	- need the following per-ensemble fields from previous steps:
-#		CTD_DEPTH
+#		DEPTH
 #		CTD_SVEL
-#	- negative depths are not allowed (should not happen given CTD_DEPTH)
+#	- negative depths are not allowed (should not happen given DEPTH)
 
 # WEIRDNESSES:
 #	- w reference layer in set_misc_flags is calculated without taking
@@ -35,6 +35,7 @@
 #	Jul 10, 2011: - added outTDseries() call
 #	Jul 12, 2011: - replaced -p by $PPI_editing_enabled flag
 #	Feb 19, 2012: - added elapsed time to binned shear output
+#	Apr 11, 2012: - added MISSING_CTD_DATA_BIT
 
 #======================================================================
 # VELOCITY EDITING
@@ -51,6 +52,7 @@ my($PPI_BIT)		= 0x80;
 my($W_CTD_BIT)		= 0x100;
 my($TILT_BIT)		= 0x200;
 my($DELTA_TILT_BIT)	= 0x400;
+my($MISSING_CTD_DATA_BIT) = 0x800;
 
 my(%flag_count);
 
@@ -237,7 +239,7 @@ sub edit_velocity($$)
 	$flag_count{$WAKE_BIT} = $flag_count{$W_OUTLIER_BIT} = $flag_count{$ERRVEL_BIT} =
 	$flag_count{$CORREL_BIT} = $flag_count{$SHEAR_BIT} = $flag_count{$BADVEL_BIT} =
 	$flag_count{$SIDELOBE_BIT} = $flag_count{$PPI_BIT} = $flag_count{$W_CTD_BIT} =
-	$flag_count{$TILT_BIT} = $flag_count{$DELTA_TILT_BIT} = 0;
+	$flag_count{$TILT_BIT} = $flag_count{$DELTA_TILT_BIT} = $flag_count{$MISSING_CTD_DATA_BIT} = 0;
 
 	for (my($ens)=$start; $ens!=$end+$De; $ens+=$De) {					# loop over all ens from start to end
 		if (abs($LADCP{ENSEMBLE}[$ens]->{CTD_W}-$LADCP{ENSEMBLE}[$ens]->{W}) > $w_max_err) {	# get rid of aliased vels (ambiguity)
@@ -251,6 +253,14 @@ sub edit_velocity($$)
 			for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
 				$edit_flags[$ens][$bin] |= $TILT_BIT;
 				$flag_count{$TILT_BIT}++;
+			}
+			next;
+		}
+		unless (numberp($LADCP{ENSEMBLE}[$ens]->{DEPTH}) &&				# get rid of ensembles with insufficient CTD info
+				numberp($LADCP{ENSEMBLE}[$ens]->{CTD_SVEL})) {
+			for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+				$edit_flags[$ens][$bin] |= $MISSING_CTD_DATA_BIT;
+				$flag_count{$MISSING_CTD_DATA_BIT}++;
 			}
 			next;
 		}																# get rid ensembles after large rotation
@@ -288,7 +298,7 @@ sub uv_to_shear($)
 {
 	my($ens) = @_;
 	my($nvel) = 0;
-	
+
 	@sh_i0 = @sh_i1 = ();
 	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) { 
 		next if ($edit_flags[$ens][$bin]);
@@ -434,20 +444,34 @@ sub calc_shear($$$$)
 		print(STDERR "\n\t\t$nvel valid velocities");
 		print(STDERR "\n\t\t$nsh valid shears");
 		print(STDERR "\n\t\tflag counts:");
-		print(STDERR "\n\t\t\tBADVEL_BIT     = $flag_count{$BADVEL_BIT}");
-		print(STDERR "\n\t\t\tERRVEL_BIT     = $flag_count{$ERRVEL_BIT}");
-		print(STDERR "\n\t\t\tCORREL_BIT     = $flag_count{$CORREL_BIT}");
-		print(STDERR "\n\t\t\tW_OUTLIER_BIT  = $flag_count{$W_OUTLIER_BIT}");
-		print(STDERR "\n\t\t\tSHEAR_BIT      = $flag_count{$SHEAR_BIT}");
-	    print(STDERR "\n\t\t\tSIDELOBE_BIT   = $flag_count{$SIDELOBE_BIT}");
-		print(STDERR "\n\t\t\tWAKE_BIT       = $flag_count{$WAKE_BIT}");
-	    print(STDERR "\n\t\t\tPPI_BIT        = $flag_count{$PPI_BIT}");
+		print(STDERR "\n\t\t\tBADVEL_BIT     = $flag_count{$BADVEL_BIT}")
+			if ($flag_count{$BADVEL_BIT});
+		print(STDERR "\n\t\t\tERRVEL_BIT     = $flag_count{$ERRVEL_BIT}")
+			if ($flag_count{$ERRVEL_BIT});
+		print(STDERR "\n\t\t\tCORREL_BIT     = $flag_count{$CORREL_BIT}")
+			if ($flag_count{$W_OUTLIER_BIT});
+		print(STDERR "\n\t\t\tW_OUTLIER_BIT  = $flag_count{$W_OUTLIER_BIT}")
+			if ($flag_count{$W_OUTLIER_BIT});
+		print(STDERR "\n\t\t\tSHEAR_BIT      = $flag_count{$SHEAR_BIT}")
+			if ($flag_count{$SIDELOBE_BIT});
+	    print(STDERR "\n\t\t\tSIDELOBE_BIT   = $flag_count{$SIDELOBE_BIT}")
+	    	if ($flag_count{$SIDELOBE_BIT});
+		print(STDERR "\n\t\t\tWAKE_BIT       = $flag_count{$WAKE_BIT}")
+			if ($flag_count{$WAKE_BIT});
+	    print(STDERR "\n\t\t\tPPI_BIT        = $flag_count{$PPI_BIT}")
+	    	if ($flag_count{$PPI_BIT});
 	    printf(STDERR "\n\t\t\tW_CTD_BIT      = $flag_count{$W_CTD_BIT} (%d ensembles)",
-														$flag_count{$W_CTD_BIT}/$LADCP{N_BINS});
+														$flag_count{$W_CTD_BIT}/$LADCP{N_BINS})
+			if ($flag_count{$W_CTD_BIT});
 	    printf(STDERR "\n\t\t\tTILT_BIT       = $flag_count{$TILT_BIT} (%d ensembles)",
-														$flag_count{$TILT_BIT}/$LADCP{N_BINS});
+														$flag_count{$TILT_BIT}/$LADCP{N_BINS})
+			if ($flag_count{$TILT_BIT});
 	    printf(STDERR "\n\t\t\tDELTA_TILT_BIT = $flag_count{$DELTA_TILT_BIT} (%d ensembles)",
-														$flag_count{$DELTA_TILT_BIT}/$LADCP{N_BINS});
+														$flag_count{$DELTA_TILT_BIT}/$LADCP{N_BINS})
+			if ($flag_count{$DELTA_TILT_BIT});														
+	    printf(STDERR "\n\t\t\tMISSING_CTD_DATA_BIT = $flag_count{$MISSING_CTD_DATA_BIT} (%d ensembles)",
+														$flag_count{$MISSING_CTD_DATA_BIT}/$LADCP{N_BINS})
+			if ($flag_count{$MISSING_CTD_DATA_BIT});														
 	}
 }
 

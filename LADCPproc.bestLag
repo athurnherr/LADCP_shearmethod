@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B E S T L A G 
 #                    doc: Tue Sep 28 21:58:48 2010
-#                    dlm: Fri Jul 15 14:22:55 2011
+#                    dlm: Wed Apr 11 19:25:15 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 22 20 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 24 35 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # TODO:
@@ -20,6 +20,8 @@
 #				    make it work in regions of crazy ocean w (IWISE 16007)
 #	Jul 15, 2011: - changed screen-output of lag to take first guess lag into
 #					account
+#	Apr 11, 2011: - removed 1st guess lag consistency check based on large
+#					elapsed offsets
 
 sub interp_LADCP_w($$)
 {
@@ -95,8 +97,6 @@ sub lagLADCP2CTD()
 		printf(STDERR "\n\t1st guess offset [CTD pressure, LADCP estimated depth] = %ds [%ddbar, %dm]\n",
 				$first_guess_lag*$CTD{sampint},$CTD{press}[$CTD_10pct_down],$LADCP{ENSEMBLE}[$LADCP_10pct_down]->{DEPTH})
 					if ($opt_d);
-		croak("\n$0: cannot determine valid 1st guess offset ($LADCP_10pct_down,$CTD_10pct_down,$CTD{press}[$CTD_10pct_down])\n")
-	        if ($first_guess_lag*$CTD{sampint} > 1200);
 	}
 	
 	#------------------------------------------------------------------------------------
