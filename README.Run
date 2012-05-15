@@ -1,0 +1,56 @@
+======================================================================
+                    R E A D M E . R U N 
+                    doc: Tue May 15 18:49:00 2012
+                    dlm: Tue May 15 19:16:34 2012
+                    (c) 2012 A.M. Thurnherr
+                    uE-Info: 52 0 NIL 0 0 72 3 2 8 NIL ofnI
+======================================================================
+
+NB: DO NOT RUN FROM CURRENT DIRECTORY. (Actually, you can but will have
+    to prefix each command with a ./)
+
+
+=DATA REQUIREMENTS=
+
+- raw RDI BB ADCP files from a downlooker and/or an uplooker
+- SeaBird cnv file (ASCII or binary) with lat/lon info in the header and
+  with the following fields:
+	timeS, prDM, t090C and/or t190C, sal00 and/or sal11
+- arbitrary ASCII CTD files are also acceptable but there is no
+  documentation yet
+
+
+=CALCULATE LADCP SHEAR PROFILE=
+
+assume files:
+	001DL000.000	downlooker ADCP file
+	001UL000.000	uplooker ADCP file
+	001.cnv		CTD file
+
+LADCPproc -p 001DL.sh -b 001.BT 001DL000.000 001.cnv > /dev/null
+	creates two files, 001DL.sh (shear profiles) and 001.BT
+	(bottom-track data)
+
+LADCPproc -p 001UL.sh 001UL000.000 001.cnv > /dev/null
+	creates one file, 001UL.sh (shear profiles)
+
+
+
+=CALCULATE LADCP VELOCITY PROFILE=
+
+LADCPintsh 001DL.sh > 001DL.bc
+	creates baroclinic velocity profile from DL data
+
+LADCPintsh -b 001.BT 001DL.sh > 001DL.vel
+	creates BT-referenced absolute velocity profile from DL data
+
+LADCPintsh -b 001.BT -u 001UL.sh 001DL.sh > 001.vel
+	creates BT-referenced absolute velocity profile from combined
+	DL/UL data
+
+
+=QUALITY CHECKS=
+
+- compare to LDEO solution
+- compare UL vs DL solutions, if available
+- compare dc vs uc u, v, and, in particular w profiles

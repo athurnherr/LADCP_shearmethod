@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Tue Apr 17 18:14:06 2012
+#                    dlm: Wed Apr 18 05:23:48 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 69 93 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 70 45 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'process LADCP data to get shear, time series';
@@ -67,6 +67,7 @@ $antsSummary = 'process LADCP data to get shear, time series';
 #                 - BUG: code had assumed, but not ensured, that first CTD scan is valid
 #   Apr 13, 2012: - removed -s argument from dependencies
 #	Apr 17, 2012: - BAD BUG: magdec code call was bad and did not return correct value. ever.
+#	Apr 18, 2012: - replaced Sv.n by Sv.nsamp
 
 ($ANTS)       = (`which list` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -593,7 +594,7 @@ if (defined($opt_p)) {
 	
 	@antsNewLayout = ('depth','dc_elapsed','dc_nsamp','dc_u_z','dc_u_z.sig','dc_v_z','dc_v_z.sig','dc_w_z','dc_w_z.sig',
 							  'uc_elapsed','uc_nsamp','uc_u_z','uc_u_z.sig','uc_v_z','uc_v_z.sig','uc_w_z','uc_w_z.sig',
-							  'elapsed','nsamp','u_z','u_z.sig','v_z','v_z.sig','w_z','w_z.sig','Sv','Sv.n');
+							  'elapsed','nsamp','u_z','u_z.sig','v_z','v_z.sig','w_z','w_z.sig','Sv','Sv.nsamp');
 							  
 	&antsOut('EOF');
     close(STDOUT);

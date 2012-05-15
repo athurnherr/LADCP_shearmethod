@@ -1,0 +1,21 @@
+======================================================================
+                    R E A D M E . I N S T A L L 
+                    doc: Tue May 15 18:42:56 2012
+                    dlm: Tue May 15 19:15:36 2012
+                    (c) 2012 A.M. Thurnherr
+                    uE-Info: 16 37 NIL 0 0 72 3 2 4 NIL ofnI
+======================================================================
+
+- requires ADCP_tools available via link from 
+  http://www.ldeo.columbia.edu/LADCP
+  
+- to load output files into Matlab requires Matlab_tools available via
+  link from http://www.ldeo.columbia.edu/LADCP
+
+- requires Eric Firing's geomag code available from
+  http://currents.soest.hawaii.edu/hg
+
+- runs with perl 5.12.4 or later, but older versions may work as well
+
+- to set up, add both ADCP_tools and the current directory to path
+
