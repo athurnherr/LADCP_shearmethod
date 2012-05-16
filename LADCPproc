@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Wed Apr 18 05:23:48 2012
+#                    dlm: Wed May 16 06:54:18 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 70 45 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 79 14 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'process LADCP data to get shear, time series';
@@ -68,8 +68,9 @@ $antsSummary = 'process LADCP data to get shear, time series';
 #   Apr 13, 2012: - removed -s argument from dependencies
 #	Apr 17, 2012: - BAD BUG: magdec code call was bad and did not return correct value. ever.
 #	Apr 18, 2012: - replaced Sv.n by Sv.nsamp
+#	May 16, 2012: - adapted to ANTSlib V5.0
 
-($ANTS)       = (`which list` =~ m{^(.*)/[^/]*$});
+($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
 ($LADCPPROC)  = ($0 =~ m{^(.*)/[^/]*$});
 

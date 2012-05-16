@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Sun Feb 19 22:49:28 2012
+#                    dlm: Wed May 16 06:54:32 2012
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 50 93 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 55 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -48,8 +48,9 @@ $antsSummary = 'integrate LADCP shear';
 #	Feb 19, 2012: - added processing of elapsed time
 #				  - adapted to new shear file layout (nsamp instead of nshear)
 #				  - BUG: uplooker data was not used for downcasts and and only partially for combo data
+#   May 16, 2012: - adapted to ANTSlib V5.0
 
-($ANTS) = (`which list` =~ m{^(.*)/[^/]*$});
+($ANTS) = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
 require "$ANTS/libstats.pl";
 
