@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B T 
 #                    doc: Wed Oct 20 21:05:37 2010
-#                    dlm: Fri Jul  8 03:24:56 2011
+#                    dlm: Wed May 16 18:45:15 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 148 69 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 16 51 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -13,6 +13,7 @@
 #				  - added BTrangeFlag
 #				  - added $BT processing parameters
 #				  - changed from echo amplitude to Sv
+#	May 16, 2012: - added support for -r)DI BT data
 
 my($BEAM1) = 0;
 my($BEAM2) = 1;
@@ -23,7 +24,7 @@ my($nBTfound,$nBTrangeFlag,$nBTdepthFlag,$nBTvalidVelFlag,$nBTwFlag) = (0,0,0,0,
 
 my($DEBUG) = 0;
 
-sub binBTprof($)
+sub CTDvelFromSv($)
 {
 	my($ens) = @_;
 
@@ -91,6 +92,49 @@ sub binBTprof($)
 			$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$V];
 			$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$W];
 	}
+
+	return ($CTD_u,$CTD_v,$CTD_w);
+}
+
+sub depthAtRange($$)
+{
+	my($ens,$range) = @_;
+	return $LADCP{ENSEMBLE}[$ens]->{XDUCER_FACING_UP} ?
+	       $LADCP{ENSEMBLE}[$ens]->{DEPTH} - $range :
+	       $LADCP{ENSEMBLE}[$ens]->{DEPTH} + $range;
+}
+
+sub CTDvelFromBT($)
+{
+	my($ens) = @_;
+
+	return (undef,undef,undef)
+		unless defined($LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}[$W]);
+	$nBTfound++;
+
+	$nBTrangeFlag++,return											# inconsistent range (&, impliclity, large tilt)
+		unless (max(@{$LADCP{ENSEMBLE}[$ens]->{BT_RANGE}})-min(@{$LADCP{ENSEMBLE}[$ens]->{BT_RANGE}})
+					<= $BT_max_bin_spread*$LADCP{BIN_LENGTH});
+
+	my($range) = round(avg(@{$LADCP{ENSEMBLE}[$ens]->{BT_RANGE}}));
+
+	$nBTdepthFlag++,return											# BT range inconsistent with water depth
+		unless defined($BT_min_depth) ||
+			   (abs($water_depth-depthAtRange($ens,$range)) < $sig_water_depth + $BT_max_depth_error);
+
+	return ($LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}[$U],
+			$LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}[$V],
+			$LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}[$W]);
+}
+
+
+sub binBTprof($)
+{
+	my($ens) = @_;
+	my($CTD_u,$CTD_v,$CTD_w);
+
+	($CTD_u,$CTD_v,$CTD_w) = $opt_r ? CTDvelFromBT($ens) : CTDvelFromSv($ens);
+	return unless defined($CTD_w);
 
 	$nBTwFlag++,return if (abs($CTD_w-$LADCP{ENSEMBLE}[$ens]->{W}) > $BT_max_w_difference);
 

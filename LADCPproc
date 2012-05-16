@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Wed May 16 06:54:18 2012
+#                    dlm: Wed May 16 18:44:45 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 79 14 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 73 0 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'process LADCP data to get shear, time series';
@@ -69,6 +69,7 @@ $antsSummary = 'process LADCP data to get shear, time series';
 #	Apr 17, 2012: - BAD BUG: magdec code call was bad and did not return correct value. ever.
 #	Apr 18, 2012: - replaced Sv.n by Sv.nsamp
 #	May 16, 2012: - adapted to ANTSlib V5.0
+#				  - added support for -r)DI BT data
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -87,9 +88,10 @@ require "$PERL_TOOLS/RDI_Coords.pl";
 require "$PERL_TOOLS/RDI_Utils.pl";
 
 $antsParseHeader = 0;
-&antsUsage('24a:b:c:df:g:i:kl:n:o:p:s:t:u:w:',2,
+&antsUsage('24a:b:c:df:g:i:kl:n:o:p:rs:t:u:w:',2,
     '[use -2)dary CTD sensor pair]',
     '[require -4)-beam LADCP solutions]',
+    '[use -r)DI bottom-track data]',
     '[-s)etup <file>] [-g)ps <lat,lon>]',
     '[-c)ompass-corr <offset,cos-fac,sin-fac>]',
     '[enable -p)PI editing]',
@@ -277,7 +279,10 @@ if ($LADCP{BEAM_COORDINATES}) {
 			@{$LADCP{ENSEMBLE}[$ens]->{PERCENT_GOOD}[$bin]} =					# fake it to fool ref_lr_w
 				(0,0,0,defined($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]) ? 100 : 0);
 		}
+		@{$LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}} =
+			velInstrumentToEarth(\%LADCP,$ens,velBeamToInstrument(\%LADCP,@{$LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}}));
 	}
+
 	$LADCP{BEAM_COORDINATES} = 0;
 	$LADCP{EARTH_COORDINATES} = 1;
 	unless ($opt_4) {
@@ -424,24 +429,29 @@ if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
 	print(STDERR "\n\tin acoustic backscatter profiles...") if ($opt_d);
 	($water_depth,$sig_water_depth) =
 		find_backscatter_seabed($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH});
-	
-	$min_hab = $water_depth - $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH};
-	printf(STDERR "\n\twater depth      = %d(+-%.1f)m",$water_depth,$sig_water_depth);
-	printf(STDERR "\n\tclosest approach = %dmab",$min_hab);
+	printf(STDERR "\n\t\twater depth = %d(+-%.1f)m",$water_depth,$sig_water_depth)
+		if ($opt_d);
 	
 	print(STDERR "\n\tin RDI BT data...") if ($opt_d);
 	($BT_water_depth,$sig_BT_water_depth) = 
 		find_seabed(\%LADCP,$LADCP_bottom,$LADCP{BEAM_COORDINATES});
-	
 	if (defined($BT_water_depth)) {
-		$min_hab = $BT_water_depth - $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH};
-		printf(STDERR "\n\twater depth      = %d(+-%.1f)m",$BT_water_depth,$sig_BT_water_depth);
-		printf(STDERR "\n\tclosest approach = %dmab",$min_hab);
-#		$water_depth = $BT_water_depth; 							# assume BT data are better
-#		$sig_water_depth = $sig_BT_water_depth; 					# (at least they are higher vertical resolution)
+		printf(STDERR "\n\t\twater depth = %d(+-%.1f)m",$BT_water_depth,$sig_BT_water_depth)
+			if ($opt_d);
+	} else {
+		printf(STDERR "\n\t\tno seabed found") if ($opt_d);
 	}
 	
-	unless (defined($water_depth)) {
+	if ($opt_r) {													# use RDI BT data
+		$water_depth = $BT_water_depth;
+		$sig_water_depth = $sig_BT_water_depth;
+    }
+    $min_hab = $water_depth - $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH};
+
+	if (defined($water_depth)) {
+		printf(STDERR "\n\twater depth      = %d(+-%.1f)m",$water_depth,$sig_water_depth);
+		printf(STDERR "\n\tclosest approach = %dmab",$min_hab);
+    } else {	
 		print(STDERR "\n\tno seabed found\n");
 		print(STDERR "\n\tunknown water depth => PPI editing disabled\n")
 			if ($opt_d);

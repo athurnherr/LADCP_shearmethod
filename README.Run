@@ -1,9 +1,9 @@
 ======================================================================
                     R E A D M E . R U N 
                     doc: Tue May 15 18:49:00 2012
-                    dlm: Tue May 15 19:16:34 2012
+                    dlm: Wed May 16 18:55:51 2012
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 52 0 NIL 0 0 72 3 2 8 NIL ofnI
+                    uE-Info: 44 0 NIL 0 0 72 3 2 8 NIL ofnI
 ======================================================================
 
 NB: DO NOT RUN FROM CURRENT DIRECTORY. (Actually, you can but will have
@@ -34,6 +34,13 @@ LADCPproc -p 001DL.sh -b 001.BT 001DL000.000 001.cnv > /dev/null
 LADCPproc -p 001UL.sh 001UL000.000 001.cnv > /dev/null
 	creates one file, 001UL.sh (shear profiles)
 
+common LADCPproc OPTIONS:
+	-d 		generate diagnostic output
+	-r		use RDI BT data instead of echo amplitudes to find
+	        	seabed and determine CTD velocity
+	-o <dz>		output grid resolution (defaults to 5m)
+	-p <shearprof>	generate shear profile output
+	-b <btm_track>	generate BT output
 
 
 =CALCULATE LADCP VELOCITY PROFILE=

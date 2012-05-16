@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B A C K S C A T T E R 
 #                    doc: Wed Oct 20 13:02:27 2010
-#                    dlm: Tue Apr 10 13:46:28 2012
+#                    dlm: Wed May 16 17:55:14 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 52 59 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 279 33 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -17,6 +17,10 @@
 #	Jul 14, 2011: - implemented Sv_V04
 #	Jul 15, 2011: - modified Sv_V04 to take noise levels into account (Sv_T11)
 #	Apr 10, 2012: - BUG: ensonified volume in Sv_T11 was wrong
+#	May 16, 2012: - BUG: find_backscatter_seabed() used wrong start depth for
+#						 search
+#				  - BUG: same used bins entirely below seabed (only possible
+#						 for shallow casts)
 
 my($BEAM1) = 0;
 my($BEAM2) = 1;
@@ -252,20 +256,29 @@ sub depthOfGI($) { return $_[0]*$GRID_DZ + $GRID_DZ/2; }		# depth corresponding 
 
 sub find_backscatter_seabed($)
 {
-	my($search_below) = @_;
-	my($mdgi) = int($search_below/$GRID_DZ);					# grid index to begin search
+	my($water_depth) = @_;
 	my(@wdepth_gi);												# water_depth indices
 
-	print(STDERR "\n\tseabed-max grid indices:") if ($opt_d);
+	my($search_below) = max(0,$water_depth-$BT_begin_search_above);
+	my($mdgi) = int($search_below/$GRID_DZ);					# grid index to begin search
+	print(STDERR "\n\t\tlooking for seabed below $search_below m (gi >= $mdgi)") if ($opt_d);
+
+	print(STDERR "\n\t\tseabed-max grid indices:") if ($opt_d);
 	
 	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) { 			# find backscatter min/max below $search_below in each bin
-		my($min,$max,$gimax,$lastvalid) = (1e99,-1e99,-1,-1);
+		my($min,$max,$gimax,$firstvalid,$lastvalid) = (1e99,-1e99,-1,-1,-1);
 		for (my($gi)=$mdgi; $gi<@nSv; $gi++) {
 			next unless ($nSv[$gi][$bin] > 0);
+			$firstvalid = $gi if ($firstvalid < 0);
 			my($avg) = $sSv[$gi][$bin] / $nSv[$gi][$bin];
 			$lastvalid = $gi;
 			$min = $avg if ($avg < $min);
 			$max = $avg, $gimax = $gi if ($avg > $max);
+		}
+		if ($gimax == $firstvalid) {							# should be robust except maybe for huge bins
+			printf(STDERR "\n\t\tdata from below-seabed bins (%d-%d) discarded",
+				$bin+1,$LADCP{N_BINS}) if ($opt_d);
+			last;
 		}
 		if ($max-$min>10 && $gimax!=$lastvalid) { 				# ignore boundary maxima & scatter
 			printf(STDERR " %d",$gimax-$mdgi) if ($opt_d);

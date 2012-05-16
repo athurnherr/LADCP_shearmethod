@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Wed Apr 11 19:46:12 2012
+#                    dlm: Wed May 16 15:22:36 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 27 29 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 28 25 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [LADCPproc]
@@ -25,6 +25,7 @@
 #	Jul  7, 2011: - added BT processing parameters
 #	Jul 12, 2011: - added $PPI_editing_enabled
 #	Apr 11, 2012: - cosmetics
+#	May 16, 2012: - BUG: comment var name typo
 
 #----------------------------------------------------------------------
 # ASCII CTD file support
@@ -93,7 +94,7 @@ $BT_max_bin_spread = 3;
 # does not work.
 
 #$BT_min_depth = xxx;
-#$BT_max_depht = xxx;
+#$BT_max_depth = xxx;
 
 # Maximum difference between water depth and average distance of echo max.,
 # if $BT_min_depth and $BT_max_depth are not set. The stddev of the detected
