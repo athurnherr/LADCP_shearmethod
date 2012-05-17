@@ -2,12 +2,10 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Wed May 16 18:44:45 2012
+#                    dlm: Thu May 17 07:27:41 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 73 0 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 363 57 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
-
-$antsSummary = 'process LADCP data to get shear, time series';
 
 # NOTES:
 #   - the shear-method editing in this code is based on Eric Firing's merge.c
@@ -70,6 +68,10 @@ $antsSummary = 'process LADCP data to get shear, time series';
 #	Apr 18, 2012: - replaced Sv.n by Sv.nsamp
 #	May 16, 2012: - adapted to ANTSlib V5.0
 #				  - added support for -r)DI BT data
+#				  - added $LADCP{MEAN_DT} from vertical-velocity code
+#	May 17, 2012: - significantly relaxed profile-range consistency check (from 20% to 50%)
+#					which is required for Dan Torres' shallow casts
+#				  - added version info
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -78,6 +80,7 @@ $antsSummary = 'process LADCP data to get shear, time series';
 require "$ANTS/ants.pl";
 require "$ANTS/libEOS83.pl";
 require "$ANTS/libstats.pl";
+require "$LADCPPROC/LADCPproc.version";
 require "$LADCPPROC/LADCPproc.loadCTD";
 require "$LADCPPROC/LADCPproc.bestLag";
 require "$LADCPPROC/LADCPproc.BT";
@@ -86,6 +89,8 @@ require "$LADCPPROC/LADCPproc.UHcode";
 require "$PERL_TOOLS/RDI_BB_Read.pl";
 require "$PERL_TOOLS/RDI_Coords.pl";
 require "$PERL_TOOLS/RDI_Utils.pl";
+
+$antsSummary = "$version -- process LADCP data to get shear, time series";
 
 $antsParseHeader = 0;
 &antsUsage('24a:b:c:df:g:i:kl:n:o:p:rs:t:u:w:',2,
@@ -324,6 +329,12 @@ print(STDERR "\t\tconstructing profile time series...")
 croak("\n$LADCP_file: no good ensembles found\n")
     unless defined($LADCP_start);
 
+my($cast_duration) = $LADCP{ENSEMBLE}[$LADCP_end]->{UNIX_TIME} -
+                     $LADCP{ENSEMBLE}[$LADCP_start]->{UNIX_TIME};
+croak("$0: implausibly short cast ($cast_duration seconds)\n")
+	unless ($cast_duration > 600);
+$LADCP{MEAN_DT} = $cast_duration / ($LADCP_end-$LADCP_start-1);
+
 if ($opt_d) {
 	printf(STDERR "\n\t\t\tStart of cast    : %s (#%5d) at %6.1fm\n",
 	                    $LADCP{ENSEMBLE}[$LADCP_start]->{TIME},
@@ -333,19 +344,23 @@ if ($opt_d) {
 	                    $LADCP{ENSEMBLE}[$LADCP_bottom]->{TIME},
 	                    $LADCP{ENSEMBLE}[$LADCP_bottom]->{NUMBER},
 	                    $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH});
-	printf(STDERR "\t\t\tEnd of cast      : %s (#%5d) at %6.1fm",
+	printf(STDERR "\t\t\tEnd of cast      : %s (#%5d) at %6.1fm\n",
 	                    $LADCP{ENSEMBLE}[$LADCP_end]->{TIME},
 	                    $LADCP{ENSEMBLE}[$LADCP_end]->{NUMBER},
 	                    $LADCP{ENSEMBLE}[$LADCP_end]->{DEPTH});
+	printf(STDERR "\t\t\tAvg ping interval: %.1fs",$LADCP{MEAN_DT});
 }
 
 print(STDERR "\n");
 
 my($LADCP_prof_range) = $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH} -
 							min($LADCP{ENSEMBLE}[$LADCP_start]->{DEPTH},$LADCP{ENSEMBLE}[$LADCP_end]->{DEPTH});
+my($CTD_prof_range) = $CTD{maxpress} - $CTD{minpress};
 croak(sprintf("$0: LADCP profile depth range (%dm) inconsistent with max CTD pressure range (%ddbar)\n",
-		$LADCP_prof_range,$CTD{maxpress}-$CTD{minpress}))
-	if (abs($LADCP_prof_range-($CTD{maxpress}-$CTD{minpress}))/(0.99*($CTD{maxpress}-$CTD{minpress})) > 0.2);
+		$LADCP_prof_range,$CTD_prof_range))
+	if (abs($LADCP_prof_range-0.99*$CTD_prof_range) > max(0.2*0.99*$CTD_prof_range,
+														  abs($LADCP{ENSEMBLE}[$LADCP_end]->{DEPTH}),
+														  50));
 
 #----------------------------------------------------------------------
 # Step 5: Add CTD to LADCP Data & correct velocities for sound speed
