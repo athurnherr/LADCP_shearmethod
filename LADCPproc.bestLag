@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B E S T L A G 
 #                    doc: Tue Sep 28 21:58:48 2010
-#                    dlm: Wed Apr 11 19:25:15 2012
+#                    dlm: Fri May 18 19:08:11 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 24 35 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 25 79 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # TODO:
@@ -22,6 +22,7 @@
 #					account
 #	Apr 11, 2011: - removed 1st guess lag consistency check based on large
 #					elapsed offsets
+#	May 18, 2012: - BUG: window start index was not always calculated correctly
 
 sub interp_LADCP_w($$)
 {
@@ -109,8 +110,11 @@ sub lagLADCP2CTD()
 	
 	for (my($ens)=$LADCP_start,my($r)=0; $ens<=$LADCP_end; $ens++) {
 		while ($r*$CTD{sampint} < $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME}) {
-			$LADCP_w[$r-$first_guess_lag] = interp_LADCP_w($r*$CTD{sampint},$ens)
-				unless ($first_guess_lag > $r);
+			unless ($first_guess_lag > $r) {
+				$LADCP_w[$r-$first_guess_lag] = interp_LADCP_w($r*$CTD{sampint},$ens);
+				$firstValid = $r-$first_guess_lag unless defined($firstValid);
+				$nValid++;
+			}
 			$r++;
 		}
 	}
@@ -135,7 +139,7 @@ sub lagLADCP2CTD()
 	my($lags) = '';
 	my($lastLag) = 9e99; my($nSame) = 1;
 	for (my($window)=0; $window<$opt_n; $window++) {
-		my($ws) = $window * int(@LADCP_w/$opt_n);			# window start
+		my($ws) = $firstValid + $window * int($nValid/$opt_n);	# window start
 		$ws = @LADCP_w-$opt_w if ($ws+$opt_w >= @LADCP_w);
 		$bestLag = bestLag($ws);
 		if (defined($bestLag)) {

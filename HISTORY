@@ -1,9 +1,9 @@
 ======================================================================
                     H I S T O R Y 
                     doc: Tue May 15 18:04:39 2012
-                    dlm: Thu May 17 07:19:03 2012
+                    dlm: Fri May 18 19:15:55 2012
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 25 43 NIL 0 0 72 3 2 8 NIL ofnI
+                    uE-Info: 32 62 NIL 0 0 72 3 2 8 NIL ofnI
 ======================================================================
 
 May 15, 2012:
@@ -25,5 +25,10 @@ May 17, 2012:
   - V1.0beta4 [.hg/hgrc] [LADCPproc.version]
   - minor improvements
   - relaxation of profile-depth consistency check [LADCPproc]
+
+May 18, 2012:
+  - V1.0beta5 [.hg/hgrc] [LADCPproc.version]
+  - fixed bug in [LADCPproc.bestLag] (windowing was off)
+  - reduced implausibly short cast threshold from 10 to 5 mins
 
 

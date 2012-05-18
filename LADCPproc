@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Thu May 17 07:27:41 2012
+#                    dlm: Fri May 18 19:15:37 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 363 57 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 75 67 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -72,6 +72,7 @@
 #	May 17, 2012: - significantly relaxed profile-range consistency check (from 20% to 50%)
 #					which is required for Dan Torres' shallow casts
 #				  - added version info
+#	May 18, 2012: - reduced "implausibly short cast" threshold to 5 min
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -332,7 +333,7 @@ croak("\n$LADCP_file: no good ensembles found\n")
 my($cast_duration) = $LADCP{ENSEMBLE}[$LADCP_end]->{UNIX_TIME} -
                      $LADCP{ENSEMBLE}[$LADCP_start]->{UNIX_TIME};
 croak("$0: implausibly short cast ($cast_duration seconds)\n")
-	unless ($cast_duration > 600);
+	unless ($cast_duration > 300);
 $LADCP{MEAN_DT} = $cast_duration / ($LADCP_end-$LADCP_start-1);
 
 if ($opt_d) {
