@@ -1,9 +1,9 @@
 ======================================================================
                     R E A D M E . R U N 
                     doc: Tue May 15 18:49:00 2012
-                    dlm: Wed May 16 18:55:51 2012
+                    dlm: Fri May 25 08:55:21 2012
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 44 0 NIL 0 0 72 3 2 8 NIL ofnI
+                    uE-Info: 64 0 NIL 0 0 72 3 2 8 NIL ofnI
 ======================================================================
 
 NB: DO NOT RUN FROM CURRENT DIRECTORY. (Actually, you can but will have
@@ -54,6 +54,15 @@ LADCPintsh -b 001.BT 001DL.sh > 001DL.vel
 LADCPintsh -b 001.BT -u 001UL.sh 001DL.sh > 001.vel
 	creates BT-referenced absolute velocity profile from combined
 	DL/UL data
+
+common LADCPintsh OPTIONS:
+	- u		use uplooker shear (in addition to downlooker,
+			which is always used)
+	- b <file>	use BT file to reference baroclinic velocity
+	                profiles; LDEO_IX and LADCPproc output formats
+			supported 
+	- n <samp>	set minimum number of shear samples to use
+	- m <samp>	set minimum BT samples to use
 
 
 =QUALITY CHECKS=

@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Wed May 16 06:54:32 2012
+#                    dlm: Fri May 25 08:51:04 2012
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 55 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 52 38 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -49,6 +49,7 @@ $antsSummary = 'integrate LADCP shear';
 #				  - adapted to new shear file layout (nsamp instead of nshear)
 #				  - BUG: uplooker data was not used for downcasts and and only partially for combo data
 #   May 16, 2012: - adapted to ANTSlib V5.0
+#	May 25, 2012: - added code to read LDEO_IX bottom-track data
 
 ($ANTS) = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
@@ -65,8 +66,8 @@ require "$ANTS/libstats.pl";
 croak("$0: -m requires -b\n")
 	if defined($opt_m) && !defined($opt_b);
 
-&antsCardOpt(\$opt_n,10);	## minimum number of samples for shear
-&antsCardOpt(\$opt_m,10);	# minimum number of samples for BT data
+&antsCardOpt(\$opt_n,10);				# minimum number of samples for shear
+$minBTsamp = &antsCardOpt($opt_m,10);	# minimum number of samples for BT data
 
 &antsFileOpt($opt_b);		# BT file
 
@@ -352,36 +353,74 @@ if (defined($opt_b)) {											# reference to bottom-track profile
 	open(BTF,$opt_b) || croak("$opt_b: $!\n");
 
 	my(@BTL) = &antsFileLayout(BTF);
-	my($BTdF,$BTndF,$BTuF,$BTvF,$BTwF,$BTusF,$BTvsF,$BTwsF);
-	for (my($f)=0; $f<@BTL; $f++) {
-		$BTdF = $f if ($BTL[$f] eq 'depth');
-		$BTuF = $f if ($BTL[$f] eq 'u');
-		$BTvF = $f if ($BTL[$f] eq 'v');
-		$BTwF = $f if ($BTL[$f] eq 'w');
-		$BTusF = $f if ($BTL[$f] eq 'u.sig');
-		$BTvsF = $f if ($BTL[$f] eq 'v.sig');
-		$BTwsF = $f if ($BTL[$f] eq 'w.sig');
-		$BTndF = $f if ($BTL[$f] eq 'nsamp');
-	}
-	croak("$opt_b: not a valid BT file\n")
-		unless defined($BTdF) && defined($BTuF) && defined($BTvF) && defined($BTwF) &&
-			   defined($BTusF) && defined($BTvsF) && defined($BTwsF) && defined($BTndF);
+	if (@BTL) {													# valid ANTS file
+		my($BTdF,$BTndF,$BTuF,$BTvF,$BTwF,$BTusF,$BTvsF,$BTwsF);
+		for (my($f)=0; $f<@BTL; $f++) {
+			$BTdF = $f if ($BTL[$f] eq 'depth');
+			$BTuF = $f if ($BTL[$f] eq 'u');
+			$BTvF = $f if ($BTL[$f] eq 'v');
+			$BTwF = $f if ($BTL[$f] eq 'w');
+			$BTusF = $f if ($BTL[$f] eq 'u.sig');
+			$BTvsF = $f if ($BTL[$f] eq 'v.sig');
+			$BTwsF = $f if ($BTL[$f] eq 'w.sig');
+			$BTndF = $f if ($BTL[$f] eq 'nsamp');
+			$BTerrF= $f if ($BTL[$f] eq 'err');
+		}
 
-	while (my(@BTr) = &antsFileIn(BTF)) {
-		my($gi) = int($BTr[$BTdF] / $DZ);
-		next unless ($BTr[$BTndF] >= $opt_m);
-		$BT_nsamp[$gi] = $BTr[$BTndF];
-		$BT_u[$gi] = $BTr[$BTuF];
-		$BT_v[$gi] = $BTr[$BTvF];
-		$BT_w[$gi] = $BTr[$BTwF];
-		$BT_u_var[$gi] = $BTr[$BTusF]**2;
-		$BT_v_var[$gi] = $BTr[$BTvsF]**2;
-		$BT_w_var[$gi] = $BTr[$BTwsF]**2;
-	}
-
-	&fixLowSampStat(\@BT_u_var,@BT_nsamp);					# remove spurious small variances
-	&fixLowSampStat(\@BT_v_var,@BT_nsamp);
-	&fixLowSampStat(\@BT_w_var,@BT_nsamp);
+		if (defined($BTdF) && defined($BTuF) &&					# from LADCPproc
+		    defined($BTvF) && defined($BTwF) &&
+		    defined($BTusF) && defined($BTvsF) &&
+			defined($BTwsF) && defined($BTndF)) {	
+			while (my(@BTr) = &antsFileIn(BTF)) {
+				my($gi) = int($BTr[$BTdF] / $DZ);
+				next unless ($BTr[$BTndF] >= $minBTsamp);
+				$BT_nsamp[$gi] = $BTr[$BTndF];
+				$BT_u[$gi] = $BTr[$BTuF];
+				$BT_v[$gi] = $BTr[$BTvF];
+				$BT_w[$gi] = $BTr[$BTwF];
+				$BT_u_var[$gi] = $BTr[$BTusF]**2;
+				$BT_v_var[$gi] = $BTr[$BTvsF]**2;
+				$BT_w_var[$gi] = $BTr[$BTwsF]**2;
+			}
+			&fixLowSampStat(\@BT_u_var,@BT_nsamp);				# remove spurious small variances
+			&fixLowSampStat(\@BT_v_var,@BT_nsamp);
+	        &fixLowSampStat(\@BT_w_var,@BT_nsamp);
+        } elsif (defined($BTdF) && defined($BTuF) &&			# LDEO_IX ANTS format
+				 defined($BTvF) && defined($BTerrF)) {
+			croak("$0: -m not supported for this BT file format\n")
+				if defined($opt_m);
+			while (my(@BTr) = &antsFileIn(BTF)) {
+				my($gi) = int($BTr[$BTdF] / $DZ);
+				$BT_u[$gi] = $BTr[$BTuF];
+				$BT_v[$gi] = $BTr[$BTvF];
+				$BT_u_var[$gi] = $BTr[$BTerrF]**2;
+				$BT_v_var[$gi] = $BTr[$BTerrF]**2;
+#				print(STDERR "$gi $BT_u[$gi] $BT_v[$gi] $BT_u_var[$gi] $BT_v_var[$gi]\n");
+			}
+        } else {
+			croak("$opt_b: not a valid BT file (ANTS format)\n");
+		}
+	} else {													# non-ANTS file (LDEO_IX assumed)
+		croak("$0: -m not supported for this BT file format\n")
+			if defined($opt_m);
+		while (<BTF>) {
+			last if /^Columns\s+=\s+z:u:v:err/;
+		}
+		croak("$opt_b: not a valid BT file (non-ANTS format)\n")
+			unless /^Columns\s+=\s+z:u:v:err/;
+		while (<BTF>) {
+			my($depth,$u,$v,$err) = split;
+			croak("$0: cannot handle non-numeric BT data (implementation restriction)\n")
+				unless numberp($depth) && numberp($u) && numberp($v) && numberp($err);
+			my($gi) = int($depth / $DZ);
+			$BT_u[$gi] = $u;
+			$BT_v[$gi] = $v;
+			$BT_u_var[$gi] = $err**2;
+			$BT_v_var[$gi] = $err**2;
+#			print(STDERR "$gi $BT_u[$gi] $BT_v[$gi] $BT_u_var[$gi] $BT_v_var[$gi]\n");
+		}
+    }
+    close(BTF);
 
 	my($sumU,$sumV,$sumW,$dc_sumU,$dc_sumV,$dc_sumW,		# average integrated-shear velocities
 	   $uc_sumU,$uc_sumV,$uc_sumW);
@@ -398,35 +437,40 @@ if (defined($opt_b)) {											# reference to bottom-track profile
 			$nSumVel++;
 			$sumU += $u[$r]; $sumV += $v[$r]; $sumW += $w[$r];
 			$wSumBTu += $BT_u[$r] / $BT_u_var[$r]; $sumVarBTu += 1/$BT_u_var[$r];
-#			printf(STDERR "v = $BT_v[$r] (w = %.1f)\n",1/$BT_v_var[$r]);
 			$wSumBTv += $BT_v[$r] / $BT_v_var[$r]; $sumVarBTv += 1/$BT_v_var[$r];
-			$wSumBTw += $BT_w[$r] / $BT_w_var[$r]; $sumVarBTw += 1/$BT_w_var[$r];
+			if (@BT_w) {
+				$wSumBTw += $BT_w[$r] / $BT_w_var[$r]; $sumVarBTw += 1/$BT_w_var[$r];
+			}
 		}
 		if (numberp($BT_u[$r]) && numberp($dc_u[$r])) {
 			$dc_nSumVel++;
 			$dc_sumU += $dc_u[$r]; $dc_sumV += $dc_v[$r]; $dc_sumW += $dc_w[$r];
 			$dc_wSumBTu += $BT_u[$r] / $BT_u_var[$r]; $dc_sumVarBTu += 1/$BT_u_var[$r];
 			$dc_wSumBTv += $BT_v[$r] / $BT_v_var[$r]; $dc_sumVarBTv += 1/$BT_v_var[$r];
-			$dc_wSumBTw += $BT_w[$r] / $BT_w_var[$r]; $dc_sumVarBTw += 1/$BT_w_var[$r];
+			if (@BT_w) {
+				$dc_wSumBTw += $BT_w[$r] / $BT_w_var[$r]; $dc_sumVarBTw += 1/$BT_w_var[$r];
+			}
 		}
 		if (numberp($BT_u[$r]) && numberp($uc_u[$r])) {
 			$uc_nSumVel++;
 			$uc_sumU += $uc_u[$r]; $uc_sumV += $uc_v[$r]; $uc_sumW += $uc_w[$r];
 			$uc_wSumBTu += $BT_u[$r] / $BT_u_var[$r]; $uc_sumVarBTu += 1/$BT_u_var[$r];
 			$uc_wSumBTv += $BT_v[$r] / $BT_v_var[$r]; $uc_sumVarBTv += 1/$BT_v_var[$r];
-			$uc_wSumBTw += $BT_w[$r] / $BT_w_var[$r]; $uc_sumVarBTw += 1/$BT_w_var[$r];
+			if (@BT_w) {
+				$uc_wSumBTw += $BT_w[$r] / $BT_w_var[$r]; $uc_sumVarBTw += 1/$BT_w_var[$r];
+			}
 		}
 	}
 
 	if ($nSumVel > 0) {
 		$refU = $sumU/$nSumVel - $wSumBTu/$sumVarBTu;
 		$refV = $sumV/$nSumVel - $wSumBTv/$sumVarBTv;
-		$refW = $sumW/$nSumVel - $wSumBTw/$sumVarBTw;
-	    
+		$refW = $sumW/$nSumVel - $wSumBTw/$sumVarBTw if (@BT_w);
+
 		if ($dc_nSumVel > 0) {
 			$dc_refU = $dc_sumU/$dc_nSumVel - $dc_wSumBTu/$dc_sumVarBTu;
 			$dc_refV = $dc_sumV/$dc_nSumVel - $dc_wSumBTv/$dc_sumVarBTv;
-			$dc_refW = $dc_sumW/$dc_nSumVel - $dc_wSumBTw/$dc_sumVarBTw;
+			$dc_refW = $dc_sumW/$dc_nSumVel - $dc_wSumBTw/$dc_sumVarBTw if (@BT_w);
 		} else {
 			&antsInfo("$opt_b: insufficient BT data to constrain dc profile --- baroclinic profile only");
 		}
@@ -434,7 +478,7 @@ if (defined($opt_b)) {											# reference to bottom-track profile
 		if ($uc_nSumVel > 0) {
 			$uc_refU = $uc_sumU/$uc_nSumVel - $uc_wSumBTu/$uc_sumVarBTu;
 			$uc_refV = $uc_sumV/$uc_nSumVel - $uc_wSumBTv/$uc_sumVarBTv;
-		    $uc_refW = $uc_sumW/$uc_nSumVel - $uc_wSumBTw/$uc_sumVarBTw;
+		    $uc_refW = $uc_sumW/$uc_nSumVel - $uc_wSumBTw/$uc_sumVarBTw if (@BT_w);
 		} else {
 			&antsInfo("$opt_b: insufficient BT data to constrain dc profile --- baroclinic profile only");
 		}
@@ -448,30 +492,32 @@ unless (defined($refU)) {									# no reference velocity => use zero mean
 	for (my($r)=0; $r<@depth; $r++) {
 		if (numberp($u[$r])) {
 			$nSumVel++;
-			$sumU += $u[$r]; $sumV += $v[$r]; $sumW += $w[$r];
+			$sumU += $u[$r]; $sumV += $v[$r]; $sumW += $w[$r] if (@BT_w);
         }
     }
-	$refU = $sumU / $nSumVel; $refV = $sumV / $nSumVel; $refW = $sumW / $nSumVel;
+	$refU = $sumU / $nSumVel; $refV = $sumV / $nSumVel; $refW = $sumW / $nSumVel if (@BT_w);
 }
 unless (defined($dc_refU)) {
 	my($dc_sumU,$dc_sumV,$dc_sumW,$dc_nSumVel);
 	for (my($r)=0; $r<@depth; $r++) {
         if (numberp($dc_u[$r])) {
 			$dc_nSumVel++;
-			$dc_sumU += $dc_u[$r]; $dc_sumV += $dc_v[$r]; $dc_sumW += $dc_w[$r];
+			$dc_sumU += $dc_u[$r]; $dc_sumV += $dc_v[$r]; $dc_sumW += $dc_w[$r] if (@BT_w);
 		}
 	}
-	$dc_refU = $dc_sumU / $dc_nSumVel; $dc_refV = $dc_sumV / $dc_nSumVel; $dc_refW = $dc_sumW / $dc_nSumVel;
+	$dc_refU = $dc_sumU / $dc_nSumVel; $dc_refV = $dc_sumV / $dc_nSumVel;
+	$dc_refW = $dc_sumW / $dc_nSumVel if (@BT_w);
 }
 unless (defined($uc_refU)) {
 	my($uc_sumU,$uc_sumV,$uc_sumW,$uc_nSumVel);
 	for (my($r)=0; $r<@depth; $r++) {
         if (numberp($uc_u[$r])) {
 			$uc_nSumVel++;
-			$uc_sumU += $uc_u[$r]; $uc_sumV += $uc_v[$r]; $uc_sumW += $uc_w[$r];
+			$uc_sumU += $uc_u[$r]; $uc_sumV += $uc_v[$r]; $uc_sumW += $uc_w[$r] if (@BT_w);
 		}
 	}
-	$uc_refU = $uc_sumU / $uc_nSumVel; $uc_refV = $uc_sumV / $uc_nSumVel; $uc_refW = $uc_sumW / $uc_nSumVel;
+	$uc_refU = $uc_sumU / $uc_nSumVel; $uc_refV = $uc_sumV / $uc_nSumVel;
+	$uc_refW = $uc_sumW / $uc_nSumVel if (@BT_w);
 }
 
 for (my($r)=0; $r<@depth; $r++) {							# reference velocities
