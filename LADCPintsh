@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Fri May 25 08:51:04 2012
+#                    dlm: Thu Jun 14 11:47:56 2012
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 52 38 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 487 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -50,26 +50,27 @@ $antsSummary = 'integrate LADCP shear';
 #				  - BUG: uplooker data was not used for downcasts and and only partially for combo data
 #   May 16, 2012: - adapted to ANTSlib V5.0
 #	May 25, 2012: - added code to read LDEO_IX bottom-track data
+#	Jun 14, 2012: - noticed that -b now works also with LDEO SADCP files :-); renamed -b option to -r
 
 ($ANTS) = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
 require "$ANTS/libstats.pl";
 
-&antsUsage('b:dm:n:s:w:u:',0,
+&antsUsage('dm:n:r:s:w:u:',0,
 	'[-d)ebug]',
-	'[reference with -b)ottom-track <file> [-m)in BT samp[10]]]',
-	'[-u)plooker <file>]',
+	'[-r)eference with <BT or SADCP file> [-m)in <samp[10]>]]',
+	'[-u)plooker <binned shear file>]',
 	'[min -n) <shear samp[10]>]',
 	'[output -s)hear-pro <file>]',
 	'[LADCP shear file]');
 
-croak("$0: -m requires -b\n")
-	if defined($opt_m) && !defined($opt_b);
+croak("$0: -m meaningless without -r\n")
+	if defined($opt_m) && !defined($opt_r);
 
 &antsCardOpt(\$opt_n,10);				# minimum number of samples for shear
 $minBTsamp = &antsCardOpt($opt_m,10);	# minimum number of samples for BT data
 
-&antsFileOpt($opt_b);		# BT file
+&antsFileOpt($opt_r);		# reference velocity file
 
 &antsFileOpt($opt_u);		# UL shear file
 open(ULF,$opt_u) || croak("$opt_u: $!\n")
@@ -347,10 +348,10 @@ for (my($r)=my($u)=my($v)=my($w)=my($dc_u)=my($dc_v)=my($dc_w)=my($uc_u)=my($uc_
 
 my($refU,$refV,$refW,$dc_refU,$dc_refV,$dc_refW,$uc_refU,$uc_refV,$uc_refW);
 
-if (defined($opt_b)) {											# reference to bottom-track profile
-	print(STDERR "Loading BT data from $opt_b...\n")
+if (defined($opt_r)) {											# reference to bottom-track profile
+	print(STDERR "Loading reference-velocity data from $opt_r...\n")
 		if ($opt_d);
-	open(BTF,$opt_b) || croak("$opt_b: $!\n");
+	open(BTF,$opt_r) || croak("$opt_r: $!\n");
 
 	my(@BTL) = &antsFileLayout(BTF);
 	if (@BTL) {													# valid ANTS file
@@ -398,7 +399,7 @@ if (defined($opt_b)) {											# reference to bottom-track profile
 #				print(STDERR "$gi $BT_u[$gi] $BT_v[$gi] $BT_u_var[$gi] $BT_v_var[$gi]\n");
 			}
         } else {
-			croak("$opt_b: not a valid BT file (ANTS format)\n");
+			croak("$opt_r: not a valid reference-velocity file (ANTS format)\n");
 		}
 	} else {													# non-ANTS file (LDEO_IX assumed)
 		croak("$0: -m not supported for this BT file format\n")
@@ -406,7 +407,7 @@ if (defined($opt_b)) {											# reference to bottom-track profile
 		while (<BTF>) {
 			last if /^Columns\s+=\s+z:u:v:err/;
 		}
-		croak("$opt_b: not a valid BT file (non-ANTS format)\n")
+		croak("$opt_r: not a valid reference-velocity file (non-ANTS format)\n")
 			unless /^Columns\s+=\s+z:u:v:err/;
 		while (<BTF>) {
 			my($depth,$u,$v,$err) = split;
@@ -472,7 +473,7 @@ if (defined($opt_b)) {											# reference to bottom-track profile
 			$dc_refV = $dc_sumV/$dc_nSumVel - $dc_wSumBTv/$dc_sumVarBTv;
 			$dc_refW = $dc_sumW/$dc_nSumVel - $dc_wSumBTw/$dc_sumVarBTw if (@BT_w);
 		} else {
-			&antsInfo("$opt_b: insufficient BT data to constrain dc profile --- baroclinic profile only");
+			&antsInfo("$opt_r: insufficient reference-velocity data to constrain dc profile --- baroclinic profile only");
 		}
 	    
 		if ($uc_nSumVel > 0) {
@@ -480,10 +481,10 @@ if (defined($opt_b)) {											# reference to bottom-track profile
 			$uc_refV = $uc_sumV/$uc_nSumVel - $uc_wSumBTv/$uc_sumVarBTv;
 		    $uc_refW = $uc_sumW/$uc_nSumVel - $uc_wSumBTw/$uc_sumVarBTw if (@BT_w);
 		} else {
-			&antsInfo("$opt_b: insufficient BT data to constrain dc profile --- baroclinic profile only");
+			&antsInfo("$opt_r: insufficient reference-velocity data to constrain dc profile --- baroclinic profile only");
 		}
 	} else {
-		&antsInfo("$opt_b: no valid BT data --- baroclinic profiles only");
+		&antsInfo("$opt_r: no valid reference-velocity data --- baroclinic profiles only");
 	}
 }
 

@@ -1,0 +1,77 @@
+======================================================================
+                    R E A D M E . O U T P U T 
+                    doc: Tue May 15 19:17:50 2012
+                    dlm: Fri Jun 15 07:39:19 2012
+                    (c) 2012 A.M. Thurnherr
+                    uE-Info: 44 0 NIL 0 0 72 3 2 8 NIL ofnI
+======================================================================
+
+This README describes the output produced by [LADCPproc] and
+[LADCPintsh].
+
+
+=File Format and Interface with Matlab=
+
+All output files produced by [LADCPproc] and [LADCPintsh] are in a
+proprietary undocumented ASCII format, called ANTS. To important and
+export ANTS files into and from Matlab, the Matlab_tools are required
+(see [README.Install]).
+
+To import the ANTS file <013DL.sh> into Matlab, use
+
+	sh = loadANTS('013DL.sh');
+
+The resulting structure will contain Metadata as scalars and the data
+from each field in a suitably named vector.
+
+To export the suitable Matlab structure <binned_sh> as the ANTS file
+<013DL.shprof>, use
+
+	struct2ANTS(binned_sh,'013DL.sh','013DL.shprof');
+
+The second argument defines a dependency (the file <013DL.shprof> should
+be re-made when <013DL.sh> changes).
+
+
+=[LADCPproc] Output=
+
+The STDOUT of [LADCPproc] consists of a list of all shear samples ---
+essentially a time-depth-series (.tds) of shear values. If this output
+is not required, STDOUT can be redirected to /dev/null.
+
+The STDERR of [LADCPproc] consists of the diagnostic output. This output
+should be captured into a log file. This is much easier with standard
+(bash, Korn, Bourne) shells than with csh derivates.
+
+Additional output is produced with the following options:
+
+	-p 	write a binned shear profile file that can be fed
+	        directly to [LADCPintsh] to create a relative
+		(baroclinic) velocity profile
+
+	-b	write a bottom-track file that can be fed directly to
+	        [LADCPintsh] (-r option) to reference the baroclinic
+		velocity profile
+
+	-t	write a time-series file, which is useful primarily for
+	  	diagnosing problems with the time-lagging of CTD and
+		LADCP data
+
+	-f	write a file with all the velocity editing flags
+
+	-a	write a .dts file of the acoustic backscatter
+
+	-k	write bottom track profiles (as a single file)
+
+
+=[LADCPintsh] Output=
+
+The STDOUT of [LADCPintsh] consists of a velocity profile created from
+the vertically integrated shear and possibly referenced by an external
+velocity profile.
+
+The STDERR of [LADCPintsh] consists of minimal diagnostic output.
+
+On -s, additionally the shear profile is written to a file just before
+integration. This is primarily useful for combining shear data from
+down- and uplooking ADCPs.

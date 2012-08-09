@@ -1,0 +1,70 @@
+======================================================================
+                    R E A D M E 
+                    doc: Tue May 15 18:10:40 2012
+                    dlm: Fri Jun 15 06:34:57 2012
+                    (c) 2012 A.M. Thurnherr
+                    uE-Info: 42 5 NIL 0 0 72 3 2 8 NIL ofnI
+======================================================================
+
+This directory contains a re-implementation of the shear method for
+LADCP velocity processing, written and copyrighted by  A.M. Thurnherr;
+the appropriate reference is Thurnherr [J. Tech., 2012, DOI:
+10.1175/JTECH-D-11-00158.1].
+
+Essentially, the software is a re-implementation of the shear method
+for LADCP velocity processing. Data editing borrows heavily from Eric
+Firing's c/Matlab/perl code that was used extensively during the later
+stages of the WOCE. However, some of the algorithms were simplified
+considerably, in particular
+
+1) a much simpler gridding algorithm is used
+2) no PPI editing is carried out
+3) there is no support for using GPS data for velocity referencing
+
+In regions of good scattering, the shear output from this software when
+applied to data collected with current RDI instruments can be expected
+to be very similar to the corresponding output from Eric's code with
+PPI editing disabled, except that the high wavenumbers are considerably
+less damped in this re-implementation (see Thurnherr [2012]). In
+regions of bad scattering, this software simply leaves gaps in the
+shear profiles whereas Eric's code uses a low-pass filtered version of
+the shear to interpolate across gaps in the high-resolution profiles.
+
+While this software can be used to integrate LADCP shear data
+vertically to calculate velocity profiles, velocity referencing must be
+done with a single partial-depth velocity profile (e.g. from BT or
+SADCP data). While the resulting profiles of absolute ocean velocity
+are useful and very easily obtainable "first guesses", much better
+profiles can typically be obtained by applying multiple simultaneous
+referencing constraints with the the Shear Inversion method [Thurnherr,
+J. Tech., 2010; DOI: 10.1175/2010JTECHO708.1].
+
+THIS SOFTWARE CAN BE FREELY USED AND COPIED FOR EDUCATIONAL OR OTHER
+NOT-FOR-PROFIT PURPOSES.
+
+Currently, limited documentation is provided in the following set of
+README files:
+
+[README]		This overview
+
+[README.Install]	Installation instructions
+
+[README.ProcessData]	A HowTo for obtaining shear, as well as relative
+			and absolute velocity profiles from CTD/LADCP
+			data
+
+[README.Output]		A description of the various files produced by
+			this software
+
+[README.PostEdit]	A HowTo for post-editing shear with different
+			statistics, e.g. to filter data collected with
+			the ADCP very close to the surface, where the
+			ship's magnetic field can degrade the compass
+			data. Also describes how the shear data can be
+			gridded with statistics other than simple
+			arithmetic mean.
+
+NOTE: Most of the source files use a hard tab of 4 spaces, i.e. they
+can be viewed correctly, e.g. with "less -x4".
+
+

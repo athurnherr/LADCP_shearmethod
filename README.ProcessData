@@ -1,0 +1,151 @@
+======================================================================
+                    R E A D M E . P R O C E S S D A T A 
+                    doc: Tue May 15 18:49:00 2012
+                    dlm: Fri Jun 15 07:24:53 2012
+                    (c) 2012 A.M. Thurnherr
+                    uE-Info: 144 38 NIL 0 0 72 75 2 8 NIL ofnI
+======================================================================
+
+=Overview=
+
+This README describes how to obtain profiles of vertical shear and
+velocity from CTD/LADCP data. It assumes that all of the required
+software has been installed (see [README.Install]).
+
+The re-implemented shear method software provides two commands:
+
+[LADCPproc]	This utility produces LADCP shear data from a raw ADCP
+		data file and the corresponding CTD time series.
+		Additionally, it can create profiles of acoustic
+		backscatter, as well as BT-referenced velocity
+		profiles near the seabed from downlooking ADCPs.
+
+[LADCPintsh]	This utility produces profiles of horizontal velocity
+		from the [LADCPproc] shear output. BT profiles (from
+		[LADCPproc] or from the LDEO_IX inversion software) or
+		SADCP profiles (manually constructed) can be used to
+		reference the velocity profiles.
+
+For non-standard processing, the shear output from [LADCPproc] can be
+post-edited before gridding, e.g. in order to filter data collected at
+very shallow depths when the ADCP may be affected by the magnetic field
+of the surface vessel (see [README.PostEdit] for details).
+
+
+=DATA REQUIREMENTS=
+
+ADCP DATA: The software reads binary RDI BB ADCP files from both down-
+and upward-looking ADCPs. Clock setting of the ADCP is not important.
+
+CTD DATA: LADCP processing requires a CTD-derived time series of
+elapsed time, pressure, temperature and salinity. A time resolution of
+1Hz is recommended. The software is capable of reading both binary and
+ASCII SeaBird .cnv files with lat/lon information in the header and
+with the following fields: timeS, prDM, t090C and/or t190C, sal00
+and/or sal11. Alternatively, the CTD time series can be supplied as an
+arbitrary headerless ASCII CTD file with the same information, as
+described in [LADCPproc.defaults].
+	
+
+=CALCULATE LADCP SHEAR PROFILE=
+
+The following simple example shows how to create separate shear profiles
+from an upward- and a downward-looking ADCP, as well as a BT-referenced
+velocity profile near the seabed:
+
+Input files:
+	001DL000.000	downlooker ADCP file
+	001UL000.000	uplooker ADCP file
+	001.cnv		CTD file
+
+LADCPproc -p 001DL.sh -b 001.BT 001DL000.000 001.cnv > /dev/null
+	- this example creates two files, 001DL.sh (shear profiles) and
+	  001.BT (bottom-track data)
+	- the default output (STDOUT) from [LADCPproc] is a list of
+	  valid shear samples, which is ignored (sent to /dev/null) in
+	  this example
+	- it is recommended that the diagnostic output (STDERR) is
+	  captured in a log file; refer to the manual of your shell on
+	  how to accomplish this
+
+LADCPproc -p 001UL.sh 001UL000.000 001.cnv > /dev/null
+	- this example creates one file, 001UL.sh (shear profiles)
+
+
+In this simple example, processing is carried out with standard
+parameters. Some of the important parameters can be modified with
+[LADCPproc] options, which are listed when [LADCPproc] is ran without
+input parameters. The following are the most important [LADCPproc]
+options:
+	-d 		generate diagnostic output (recommended)
+	-r		use RDI BT data instead of echo amplitudes to find
+	        	seabed and determine CTD velocity
+	-o <dz>		output grid resolution (defaults to 5m)
+	-p <shearprof>	generate shear profile output
+	-b <btm_track>	generate BT output
+	-s <setup_file>	read additional non-default processing parameters
+			from <setup_file>
+
+However, there are many more processing parameters than can be modified
+with options --- a full list with comments can be found in
+[LADCPproc.defaults]. To change any of the default parameter values,
+create a perl-file with variable assignments (see [LADCPproc.defaults]
+for syntax) and use the -s <setup_file> option in [LADCPproc].
+
+
+=CALCULATE LADCP VELOCITY PROFILE=
+
+Given the output from the above steps, different full-depth velocity
+profiles can be produced as follows:
+
+LADCPintsh 001DL.sh > 001DL.bc
+	- this creates baroclinic (zero vertical mean) velocity profile
+	  from the DL shear data
+
+LADCPintsh -r 001.BT 001DL.sh > 001DL.vel
+	- this creates a BT-referenced absolute velocity profile from
+	  the DL shear data
+
+LADCPintsh -r 001.BT -u 001UL.sh 001DL.sh > 001.vel
+	- this creates a BT-referenced absolute velocity profile from
+	  the combined DL/UL shear data
+
+It is also possible to use SADCP data to reference the velocity
+profiles, although it is up to the user to create an input data file
+in one of the supported formats. Note that it is *not* possible to use
+multiple simultaneous referencing constraints with [LADCPintsh]. 
+
+The following are common [LADCPintsh] options:
+	-u		use uplooker shear (in addition to downlooker,
+			which is always used)
+	-r <file>	use reference-velocity data to reference baroclinic
+			velocity profiles; the following file formats
+			are supported 1) bottom-track output produced by
+			the -b option of [LADCPproc], 2) bottom-track
+			output produced by the LDEO processing software
+			(.bot files). SADCP data can be used, too, but
+			they have to be supplied in one of the two
+			supported file formats.
+	-n <samp>	set minimum number of shear samples to use
+	-m <samp>	set minimum BT samples to use
+
+
+=QUALITY CHECKS=
+
+After processing, the quality of the resulting profiles must be
+assessed. The following steps are recommended:
+
+1) Compare the down- and up-cast profiles of velocity. Vertical
+velocity is particularly useful in this context as problematic casts
+often show a striking "X" pattern.
+
+2) Inspect the standard deviation profiles of the binned shear and
+determine (by comparison with similar data) whether the standard
+deviations have the correct magnitude.
+
+3) Calculate and compare independent solutions from the uplooker and
+downlooker data. This will only validate the baroclinic velocities (i.e.
+the vertical shear).
+
+4) Compare to velocity profiles calculated with different software (e.g.
+with the LDEO_IX velocity inversion code).

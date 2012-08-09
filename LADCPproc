@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Fri May 18 19:15:37 2012
+#                    dlm: Wed Jun 13 20:10:17 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 75 67 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 75 0 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -72,7 +72,8 @@
 #	May 17, 2012: - significantly relaxed profile-range consistency check (from 20% to 50%)
 #					which is required for Dan Torres' shallow casts
 #				  - added version info
-#	May 18, 2012: - reduced "implausibly short cast" threshold to 5 min
+#	May 18, 2012: - reduced "implausibly short cast" threshold to 5 min because of Dan's shallow casts
+#	Jun 13, 2012: - added CTD_depth to tds output
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -488,14 +489,17 @@ if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
 
 print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) output...");
 
+@antsNewLayout = ('ens','elapsed','CTD_depth','downcast','depth','u_z','v_z','w_z');
+
 	#--------------------------------------------------------------------------------
 	# callback routine to output .tds data, called once each for down-/upcasts after
 	# shear has been gridded. Note that only the nominal (bin center) depth is known
-	# for each sample in this version.
+	# for each sample at this stage of processing.
+	#-------------------------------------------------------------------------------
 	
 	sub outTDseries($)
 	{
-		my($downcast) = @_; # also use local @[uvw]sh_vals[][]
+		my($downcast) = @_; # also use local [uvw]sh_vals[][]
 
 		if ($downcast) {
 			my($mingi);
@@ -507,24 +511,30 @@ print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) ou
 						   'min_depth',depthOfGI($mingi),'max_depth',depthOfGI($#ens_vals));
 			for (my($gi)=0; $gi<@ush_vals; $gi++) {
 				for (my($i)=0; $i<@{$ush_vals[$gi]}; $i++){
-					&antsOut($ens_vals[$gi][$i],$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
-							 $downcast,depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
+					&antsOut($ens_vals[$gi][$i],
+							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{DEPTH},$downcast,
+							 depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
 				}
 	        }
 		} else {
 			for (my($gi)=$#ush_vals; $gi>=0; $gi--) {
 				for (my($i)=0; $i<@{$ush_vals[$gi]}; $i++) {
-					&antsOut($ens_vals[$gi][$i],$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
-							 $downcast,depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
+					&antsOut($ens_vals[$gi][$i],
+							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{DEPTH},$downcast,
+							 depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
 				}
 	        }
 	    }
 	} # sub outDSseries
 
 	#--------------------------------------------------------------------------------
+	# end of callback routine
+	#--------------------------------------------------------------------------------
 
-@antsNewLayout = ('ens','elapsed','downcast','depth','u_z','v_z','w_z');
-$commonParams = $antsCurParams;
+
+$commonParams = $antsCurParams;										# PARAMs added up to now are common to all output files
 
 &antsAddParams('ubin_start',$ubin_start,'ubin_end',$ubin_end,		# record processing params
 			   'wbin_start',$wbin_start,'wbin_end',$wbin_end,

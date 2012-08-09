@@ -1,25 +1,47 @@
 ======================================================================
                     R E A D M E . I N S T A L L 
                     doc: Tue May 15 18:42:56 2012
-                    dlm: Wed May 16 06:56:28 2012
+                    dlm: Fri Jun 15 07:36:52 2012
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 24 31 NIL 0 0 72 3 2 4 NIL ofnI
+                    uE-Info: 46 67 NIL 0 0 72 3 2 4 NIL ofnI
 ======================================================================
 
-- requires ADCP_tools available via link from 
-  http://www.ldeo.columbia.edu/LADCP
+=Processing Software=
 
-- requires ANTSlib available via link from 
-  http://www.ldeo.columbia.edu/LADCP
-  
-- to load output files into Matlab requires Matlab_tools available via
-  link from http://www.ldeo.columbia.edu/LADCP
+The re-implemented shear method is written entirely in perl and requires
+the following sub-modules to be installed:
 
-- requires Eric Firing's geomag code available from
-  http://currents.soest.hawaii.edu/hg
+ADCP_tools	a set of tool and libraries to deal with RDI BB ADCP data;
+			available via link from http://www.ldeo.columbia.edu/LADCP
 
-- runs with perl 5.12.4 or later, but older versions may work as well
+ANTSlib		a library for dealing with the ANTS ASCII file format;
+			available via link from http://www.ldeo.columbia.edu/LADCP
 
-- to set up, add directories of ADCP_tools, ANTSlib, geomag, as well as
-  the current dirctory to your path
+LADCPproc	this software; available via link from
+			http://www.ldeo.columbia.edu/LADCP
+
+The code runs with version 5.12.4 of perl or later but it may well work
+with older versions, too. It is recommended that these three modules are
+installed in three separate directories. 
+
+In addition to the core modules listed above, the software also
+requires Eric Firing's geomag code (written in c) that is available
+from http://currents.soest.hawaii.edu/hg.
+
+The only step required to set up the software is to add the directories
+of the ADCP_tools, ANTSlib, LADCPproc, and geomag to the search path ---
+refer to the manual of your shell on how to accomplish this.
+
+To test correct setup of the software, simply call [LADCPproc] in the
+directory where you intend to process the LADCP data. If the software
+has been correctly installed, the usage of [LADCPproc] will be
+produced. 
+
+
+=Matlab Interface=
+
+As described in [README.Output], all output produced by this software is
+in a proprietary ASCII format called ANTS. In order to import/export
+ANTS files into/from Matlab the module Matlab_tools is required. This,
+too, is available via link from http://www.ldeo.columbia.edu/LADCP.
 
