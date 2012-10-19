@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Wed Jun 13 20:10:17 2012
+#                    dlm: Fri Oct 19 11:29:36 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 75 0 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 373 38 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -370,6 +370,7 @@ croak(sprintf("$0: LADCP profile depth range (%dm) inconsistent with max CTD pre
 #----------------------------------------------------------------------
 
 print(STDERR "Matching CTD to LADCP time series...");
+print(STDERR "\n") if defined($opt_l);
 
 $opt_l = defined($opt_l) ? -$opt_l : &lagLADCP2CTD();
 

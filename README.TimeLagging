@@ -1,0 +1,106 @@
+======================================================================
+                    R E A D M E . T I M E L A G G I N G 
+                    doc: Fri Oct 19 10:08:19 2012
+                    dlm: Fri Oct 19 12:13:59 2012
+                    (c) 2012 A.M. Thurnherr
+                    uE-Info: 106 0 NIL 0 0 72 3 2 8 NIL ofnI
+======================================================================
+
+=Introduction=
+
+In order to derive velocity profiles the data from the CTD and LADCP
+instruments need to be merged. This is accomplished by calculating lag
+correlations between the two corresponding time series of vertical
+velocities calculated from the two instruments. In this software, the
+time lagging is accomplished WITHOUT regard of the clock time reported
+by the instruments, i.e. the instrument clocks do not have to be
+synchronized. Instead of clock time, elapsed time in seconds is used. In
+case of the CTD data, an elapsed time field can be supplied by the user
+(see [README.ProcessData]); in case of the LADCP data, the
+"elapsed-time" field is calculated by the software. The "elapsed-time"
+fields in the processing output are always consistent with the CTD
+elapsed times. While the time-lagging algorithm implemented in the
+software is fairly robust, it has been known to fail. Possible reasons
+include:
+
+1) CTD PRESSURE SPIKES. Significant pressure spikes must be removed
+prior to processing, *without* adding or removing CTD time-series
+records.
+
+2) LACK OF SURFACE VESSEL MOTION. If there is no surface-wave motion
+affecting the vessel, time lagging is much more difficult. In rare
+cases, time lagging must be carried out manually (see below).
+
+3) MISSING CTD SCANS. For SeaBird 911 systems, if the connection
+between the CTD and the deck box is not clean CTD scans will be
+dropped. For the software, this looks like the CTD clock running faster
+than the ADCP clock. There are cases where the CTD clock appears to
+have gained more than 5 seconds during a 2000m-deep cast.
+
+4) MULTIPLE CTD FILES. When CTD acquisition is restarted during a cast,
+multiple files are created. In order to process the LADCP data from such
+a cast, a CTD time-series file without any missing records must be
+constructed manually.
+
+
+=Solving Time-Lagging Problems=
+
+While there are several run-time options that can be used to help the
+time-lagging algorithm, detailed knowledge of the algorithm is required
+to understand when and how to use these options, i.e. the user is
+referred to the code and comments in [LADCPproc.bestLag]. However, the
+following method can always be used to solve time-lagging problems, as
+long as the CTD time series does not have any gaps.
+
+
+-Step 1: Produce and Plot a Combined CTD/LADCP Time-Series File-
+
+This is accomplished by processing the data with the "-l 0" option and
+using "-t <time-series file>" to produce the file. Plot the resulting
+time series of CTD_w and LADCP_w in the same panel. The plot should
+show immediately whether there are problems with the CTD pressure data
+(spikes). Often, standard processing works after setting any bad
+pressure values to nan.
+
+
+-Step 2: Manually Determine an Approximate Time Lag-
+
+Use the output file generated in step 1 to determine how many seconds
+have to be added to the elapsed field when plotting LADCP_w to bring
+the two time series into approximate (a few seconds accuracy)
+agreement. Often, the data can now be processed normally by using "-i
+<estimated lag>".
+
+
+-Step 3: Manually Determine an Accurate Time Lag-
+
+If preprocessing with the -i option still does not succeed, time lagging
+must be carried out manually. If this happens, there is most likely a
+serious problem with either the CTD or LADCP data that should be solved
+before proceeding. This is done exactly as in step 2 but to higher
+accuracy (as high as you can). Once the best lag has been determined
+manually, the data can be reprocessed with the "-l <manually determined
+lag>" option.
+
+
+After solving any time-lagging problems the results should be checked by
+creating a time-series file (with -t) during final processing and
+overplotting the LADCP_w and CTD_w time series. If there is still a
+visible lag between the time series time lagging was not carried out
+correctly. 
+
+
+=Patching Together CTD Time-Series Files=
+
+The LADCP processing software requires the CTD data to be supplied as a
+single time series file with a constant sampling interval. When CTD
+data acquisition is restarted during a cast, multiple files are
+produced. The resulting files cannot simply be pasted together because
+the resulting time series would have gaps. The only way to solve this
+problem is to determine separate time lags for each of the CTD files
+manually (using the method described above). The difference between the
+resulting time lags is equal to the length of the gap between the two
+files. The user can now create a dummy (all fields set to nan) CTD file
+with required number of records that must be added between the CTD
+files to create a single continuous regularly-space time series.
+Fractional seconds can be ignored.

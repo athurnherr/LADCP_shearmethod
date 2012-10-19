@@ -1,9 +1,9 @@
 ======================================================================
                     R E A D M E 
                     doc: Tue May 15 18:10:40 2012
-                    dlm: Fri Jun 15 06:34:57 2012
+                    dlm: Fri Oct 19 10:03:50 2012
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 42 5 NIL 0 0 72 3 2 8 NIL ofnI
+                    uE-Info: 61 46 NIL 0 0 72 3 2 8 NIL ofnI
 ======================================================================
 
 This directory contains a re-implementation of the shear method for
@@ -53,6 +53,13 @@ README files:
 			and absolute velocity profiles from CTD/LADCP
 			data
 
+[README.TimeLagging]	The most common problem encountered during
+			processing of CTD/LADCP data with this software
+			is failure of the CTD/LADCP time-lagging
+			routine. This Readme provides additional
+			information and tips for how to solve
+			time-lagging problems.
+
 [README.Output]		A description of the various files produced by
 			this software
 
@@ -63,6 +70,9 @@ README files:
 			data. Also describes how the shear data can be
 			gridded with statistics other than simple
 			arithmetic mean.
+
+[README.YoYo]		Notes on how to process data from "non-standard"
+			casts, such as yoyo's and tow-yo's. 
 
 NOTE: Most of the source files use a hard tab of 4 spaces, i.e. they
 can be viewed correctly, e.g. with "less -x4".

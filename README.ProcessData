@@ -1,9 +1,9 @@
 ======================================================================
                     R E A D M E . P R O C E S S D A T A 
                     doc: Tue May 15 18:49:00 2012
-                    dlm: Fri Jun 15 07:24:53 2012
+                    dlm: Fri Oct 19 10:58:34 2012
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 144 38 NIL 0 0 72 75 2 8 NIL ofnI
+                    uE-Info: 42 35 NIL 0 0 72 75 2 8 NIL ofnI
 ======================================================================
 
 =Overview=
@@ -38,13 +38,14 @@ ADCP DATA: The software reads binary RDI BB ADCP files from both down-
 and upward-looking ADCPs. Clock setting of the ADCP is not important.
 
 CTD DATA: LADCP processing requires a CTD-derived time series of
-elapsed time, pressure, temperature and salinity. A time resolution of
-1Hz is recommended. The software is capable of reading both binary and
-ASCII SeaBird .cnv files with lat/lon information in the header and
-with the following fields: timeS, prDM, t090C and/or t190C, sal00
-and/or sal11. Alternatively, the CTD time series can be supplied as an
-arbitrary headerless ASCII CTD file with the same information, as
-described in [LADCPproc.defaults].
+pressure, temperature and salinity. Optionally, it is recommended that
+an elapsed time field is supplied. A time resolution of 1Hz is
+recommended. The software is capable of reading both binary and ASCII
+SeaBird .cnv files with lat/lon information in the header and with the
+following fields: timeS, prDM, t090C and/or t190C, sal00 and/or sal11.
+Alternatively, the CTD time series can be supplied as an arbitrary
+headerless ASCII CTD file with the same information, as described in
+[LADCPproc.defaults].
 	
 
 =CALCULATE LADCP SHEAR PROFILE=

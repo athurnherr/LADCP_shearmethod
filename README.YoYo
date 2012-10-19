@@ -1,0 +1,74 @@
+======================================================================
+                    R E A D M E . Y O Y O 
+                    doc: Fri Aug 10 07:07:59 2012
+                    dlm: Fri Oct 19 11:05:29 2012
+                    (c) 2012 A.M. Thurnherr
+                    uE-Info: 56 0 NIL 0 0 72 3 2 8 NIL ofnI
+======================================================================
+
+=Overview=
+
+This README contains notes on how to process data from non-standard
+casts, such as yo-yos (consecutive down-up casts collected at a given
+location without restarting the instruments) and tow-yos (yo-yos
+carried out while vessel is in slow motion).
+
+Processing of yo-yo and tow-yo data requires the following two steps:
+	1. Split the data files into individual down-upcast pairs
+	2. Process the resulting files as described in [README.ProcessData]
+
+It is important to note that yo-yo and tow-yo casts can be full depth
+(i.e. between the sea surface and the sea bed) or partial-depth. If
+absolute velocities (rather than just vertical shear) are required for
+partial-depth casts, the user must make sure that there are either BT
+data or SADCP data available for velocity referencing of each
+down-upcast pair. Essentially this means that each down-upcast pair
+must extend down to near the seabed or up into the depth range where
+SADCP data are available. 
+
+
+=Step 1: Splitting the Data Files=
+
+Both data files must be split between individual down-upcast pairs, i.e.
+whenever the CTD winch switches from up to down.
+
+CTD DATA: First, find the CTD splitting times by plotting depth vs.
+elapsed time. Then, split the CTD data into separate files using any
+text editor. If SeaBird CNV files are use, the same header can be used
+for all output files.
+
+ADCP DATA: There is an ADCP file splitting utility for M$ Windows
+provided by RDI. Alternatively, the length of each ensemble can be read
+from the binary ADCP files and the UN*X utilities "split -b" and "cat"
+can be used to split the files into the required chunks.
+
+
+=Step 2: Processing the Split Data Files=
+
+The split data files, each containing data from exactly one consecutive
+down- and up-cast, can be processed exactly as described in
+[README.ProcessData]. If the CTD time-series data used during
+processing has an "elapsed-time" field all output elapsed times are
+consistent with this input, i.e. the elapsed times of the output casts
+are relative to the beginning of the entire yo-yo or tow-yo cast.
+Otherwise, every down-/up-cast pair gets its own elapsed-time field.
+
+Usually, in standard LADCP processing the velocity data from the down-
+and upcast are combined. While this smears out any information on the
+temporal variability of the velocity field during the cast, down- and
+upcast only profiles are necessarily derived from much fewer samples
+and, therefore, associated with considerably larger uncertainties and
+errors. It has been found, in particular, that the top-to-bottom shear
+in down-/upcast-only profiles is often quite bad. In the context of
+partial-depth yo-yo and tow-yo profiles the severity of this problem
+can be evaluated by comparing two consecutive velocity profiles at
+their "unconstrained" end. E.g., in case of a partial-depth yo-yo near
+the seabed, i.e. constrained with BT data, the uppermost portion of the
+first upcast can be compared to the uppermost portion of the 2nd
+downcast, etc. If the errors are found to be unacceptably high, the
+velocity profiles from the combined down-/upcast data should be used
+instead. Alternatively, multiple simultaneous velocity referencing
+constraints can be applied, e.g. using the shear-inversion method
+described by Thurnherr (JAOT 2010).
+
+

@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . L O A D C T D 
 #                    doc: Thu Dec  9 18:39:01 2010
-#                    dlm: Tue Apr 17 18:10:38 2012
+#                    dlm: Fri Oct 19 11:27:44 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 18 27 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 76 46 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -16,6 +16,10 @@
 #	Feb  5, 2012: - BUG: ASCII file did not deal with leading spaces correctly
 #	Apr 11, 2012: - BUG: ASCII file did not handle nan latlons correctly
 #	Apr 17, 2012: - fiddled
+#	Oct 19, 2012: - BUG: support for $CTD{first_elapsed} had not been implemented
+#						 for binary files
+#				  - BUG: CTD_badval had not been considered when setting $CTD{first_elapsed}
+#				  - BUG: CNV format error was not detected correctly any more
 
 sub readCTD_ASCII($$)
 {
@@ -69,8 +73,8 @@ sub readCTD_CNV($$)
 	while (1) { 														# parse header
 		my($hdr);
 		chomp($hdr = <F>);
+		croak(" unexpected EOF (format error)!\n") unless defined($hdr);
 		$hdr =~ s/\r*$//;
-		croak("$0: unexpected EOF (format error)\n") unless defined($hdr);
 		last if ($hdr eq '*END*');
 	    
 		$CTD_nfields = $',next if ($hdr =~ /nquan = /); 				# Layout
@@ -140,7 +144,7 @@ sub readCTD_CNV($$)
 		while (1) {
 			last unless (my(@rec) = &antsFileIn(F));
 			$dtaR->{first_elapsed} = $rec[$elapsedF]
-				if defined($elapsedF) && !defined($dtaR->{first_elapsed});
+				if !defined($dtaR->{first_elapsed}) && defined($elapsedF) &&  $rec[$elapsedF]!=$CTD_badval;
 			push(@{$dtaR->{press}},($rec[$pressF] == $CTD_badval) ? nan : $rec[$pressF]);
 			push(@{$dtaR->{temp}}, ($rec[$tempF]  == $CTD_badval) ? nan : $rec[$tempF]);
 			push(@{$dtaR->{salin}},($rec[$salinF] == $CTD_badval) ? nan : $rec[$salinF]);
@@ -161,6 +165,8 @@ sub readCTD_CNV($$)
 		my(@dta) = unpack("f*",$dta);
 	
 		for (my($r)=0; $r<$CTD_nrecs; $r++) {
+			$dtaR->{first_elapsed} = $dta[$r*$CTD_nfields+$elapsedF]
+                if !defined($dtaR->{first_elapsed}) && defined($elapsedF) && $dta[$r*$CTD_nfields+$elapsedF]!=$CTD_badval;
 			push(@{$dtaR->{press}},($dta[$r*$CTD_nfields+$pressF] == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$pressF]);
 			push(@{$dtaR->{temp}}, ($dta[$r*$CTD_nfields+$tempF]  == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$tempF]);
 			push(@{$dtaR->{salin}},($dta[$r*$CTD_nfields+$salinF] == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$salinF]);
