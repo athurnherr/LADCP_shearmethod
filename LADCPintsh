@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Thu Jun 14 11:47:56 2012
+#                    dlm: Wed Oct 24 23:21:52 2012
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 487 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 132 48 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -129,7 +129,7 @@ for (my($r)=0; &antsIn(); $r++) {
 	}
 	
 	$depth[$r] = $ants_[0][$depthF];						## depth grid values
-	croak("$opt_u: inconsistent depth (DL: $depth[$r]; UL: $UL_[$depthF])\n")
+	croak("$opt_u: inconsistent depth record $r (DL: $depth[$r]; UL: $UL_[$depthF])\n")
 		if defined($opt_u) && ($UL_[$depthF] != $depth[$r]);
 		
 	$dc_nsamp = $ants_[0][$dc_nshF];						# number of shear samples

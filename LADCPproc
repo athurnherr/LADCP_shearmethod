@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Fri Oct 19 11:29:36 2012
+#                    dlm: Sun Oct 28 09:14:16 2012
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 373 38 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 77 28 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -74,6 +74,7 @@
 #				  - added version info
 #	May 18, 2012: - reduced "implausibly short cast" threshold to 5 min because of Dan's shallow casts
 #	Jun 13, 2012: - added CTD_depth to tds output
+#	Oct 28, 2012: - added -z
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -95,7 +96,7 @@ require "$PERL_TOOLS/RDI_Utils.pl";
 $antsSummary = "$version -- process LADCP data to get shear, time series";
 
 $antsParseHeader = 0;
-&antsUsage('24a:b:c:df:g:i:kl:n:o:p:rs:t:u:w:',2,
+&antsUsage('24a:b:c:df:g:i:kl:n:o:p:rs:t:u:w:z',2,
     '[use -2)dary CTD sensor pair]',
     '[require -4)-beam LADCP solutions]',
     '[use -r)DI bottom-track data]',
@@ -106,7 +107,7 @@ $antsParseHeader = 0;
     '[-i)nitial LADCP time lag <guestimate>]',
     '[-l)ag LADCP <by>] [auto-lag -w)indow <size[120s]>] [-n) <auto-lag windows[20]]',
     '[correct echo amplitude -u)sing D[eines99]|V[isbeck04]|T[hurnherr11]|n[ocorr]',
-    '[-d)iagnostic screen output]',
+    '[-d)iagnostic screen output] [-z)oom through problems]',
     'output: [shear-p)rofile <file>] [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
     '        [-a)coustic backscatter <dts-file] [bottom-trac-k) profs]',
     '<RDI file> <SeaBird file>');
@@ -358,11 +359,10 @@ print(STDERR "\n");
 my($LADCP_prof_range) = $LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH} -
 							min($LADCP{ENSEMBLE}[$LADCP_start]->{DEPTH},$LADCP{ENSEMBLE}[$LADCP_end]->{DEPTH});
 my($CTD_prof_range) = $CTD{maxpress} - $CTD{minpress};
-croak(sprintf("$0: LADCP profile depth range (%dm) inconsistent with max CTD pressure range (%ddbar)\n",
+croak(sprintf("$0: LADCP profile depth range (%dm) inconsistent with max CTD pressure range (%ddbar) [-z to disable]\n",
 		$LADCP_prof_range,$CTD_prof_range))
-	if (abs($LADCP_prof_range-0.99*$CTD_prof_range) > max(0.2*0.99*$CTD_prof_range,
-														  abs($LADCP{ENSEMBLE}[$LADCP_end]->{DEPTH}),
-														  50));
+	if (!$opt_z && abs($LADCP_prof_range-0.99*$CTD_prof_range) >
+						max(0.2*0.99*$CTD_prof_range,abs($LADCP{ENSEMBLE}[$LADCP_end]->{DEPTH}),50));
 
 #----------------------------------------------------------------------
 # Step 5: Add CTD to LADCP Data & correct velocities for sound speed
