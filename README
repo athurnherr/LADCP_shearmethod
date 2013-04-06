@@ -1,9 +1,9 @@
 ======================================================================
                     R E A D M E 
                     doc: Tue May 15 18:10:40 2012
-                    dlm: Fri Oct 19 10:03:50 2012
+                    dlm: Sat Mar 16 13:27:24 2013
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 61 46 NIL 0 0 72 3 2 8 NIL ofnI
+                    uE-Info: 18 14 NIL 0 0 72 3 2 8 NIL ofnI
 ======================================================================
 
 This directory contains a re-implementation of the shear method for
@@ -14,12 +14,11 @@ the appropriate reference is Thurnherr [J. Tech., 2012, DOI:
 Essentially, the software is a re-implementation of the shear method
 for LADCP velocity processing. Data editing borrows heavily from Eric
 Firing's c/Matlab/perl code that was used extensively during the later
-stages of the WOCE. However, some of the algorithms were simplified
-considerably, in particular
+stages of the WOCE. However, some of the algorithms were simplified.
+In particular,
 
-1) a much simpler gridding algorithm is used
-2) no PPI editing is carried out
-3) there is no support for using GPS data for velocity referencing
+1) a much simpler gridding algorithm is used, and
+2) there is no support for using GPS data for velocity referencing.
 
 In regions of good scattering, the shear output from this software when
 applied to data collected with current RDI instruments can be expected

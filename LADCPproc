@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Sun Oct 28 09:14:16 2012
+#                    dlm: Fri Mar 29 15:24:15 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 77 28 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 97 66 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -75,6 +75,7 @@
 #	May 18, 2012: - reduced "implausibly short cast" threshold to 5 min because of Dan's shallow casts
 #	Jun 13, 2012: - added CTD_depth to tds output
 #	Oct 28, 2012: - added -z
+#	Mar 16, 2013: - BUG: usage message had a -p)PI flag
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -93,6 +94,8 @@ require "$PERL_TOOLS/RDI_BB_Read.pl";
 require "$PERL_TOOLS/RDI_Coords.pl";
 require "$PERL_TOOLS/RDI_Utils.pl";
 
+$ANTSLIBS = $LADCPPROC;							# for -L libraries
+
 $antsSummary = "$version -- process LADCP data to get shear, time series";
 
 $antsParseHeader = 0;
@@ -102,7 +105,6 @@ $antsParseHeader = 0;
     '[use -r)DI bottom-track data]',
     '[-s)etup <file>] [-g)ps <lat,lon>]',
     '[-c)ompass-corr <offset,cos-fac,sin-fac>]',
-    '[enable -p)PI editing]',
     '[-o)utput grid <resolution[5m]>]',
     '[-i)nitial LADCP time lag <guestimate>]',
     '[-l)ag LADCP <by>] [auto-lag -w)indow <size[120s]>] [-n) <auto-lag windows[20]]',
@@ -265,9 +267,10 @@ printf(STDERR "\n\t\tmin/max pressure [%d/%ddbar] at scans#%d/%d",
 
 print(STDERR "\n\tLADCP...") if ($opt_d);
 
-#-------------------------------------------
+#-------------------------------------------------
 # transform to earth coordinates if required
-#-------------------------------------------
+#	- save beam_vels for later (e.g. wake) editing
+#-------------------------------------------------
 
 $U = 0;		# velocity indices
 $V = 1;
@@ -282,6 +285,7 @@ if ($LADCP{BEAM_COORDINATES}) {
 	for (my($ens)=0; $ens<=$#{$LADCP{ENSEMBLE}}; $ens++) {
 		$LADCP{ENSEMBLE}[$ens]->{TILT} = &angle_from_vertical($LADCP{ENSEMBLE}[$ens]->{PITCH},$LADCP{ENSEMBLE}[$ens]->{ROLL});
 		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+			@{$LADCP{ENSEMBLE}[$ens]->{BEAM_VEL}[$bin]} =  @{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]};
 			@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]} =
 				velInstrumentToEarth(\%LADCP,$ens,velBeamToInstrument(\%LADCP,@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]}));
 			@{$LADCP{ENSEMBLE}[$ens]->{PERCENT_GOOD}[$bin]} =					# fake it to fool ref_lr_w
@@ -363,6 +367,16 @@ croak(sprintf("$0: LADCP profile depth range (%dm) inconsistent with max CTD pre
 		$LADCP_prof_range,$CTD_prof_range))
 	if (!$opt_z && abs($LADCP_prof_range-0.99*$CTD_prof_range) >
 						max(0.2*0.99*$CTD_prof_range,abs($LADCP{ENSEMBLE}[$LADCP_end]->{DEPTH}),50));
+
+#----------------------------------------------------------------
+# call edit function
+#	- e.g. for wake editing
+#	- this is done here, because during step 5 the velocities are
+#	  sound-speed corrected, i.e. 
+#----------------------------------------------------------------
+
+&edit_LADCP_vels()
+	if (exists(&edit_LADCP_vels));
 
 #----------------------------------------------------------------------
 # Step 5: Add CTD to LADCP Data & correct velocities for sound speed
@@ -484,9 +498,9 @@ if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
 		if ($opt_d);
 }
 
-#----------------------------------------------------------------------
-# Step 8: Edit Data & also produce depth-time-series output vial callback
-#----------------------------------------------------------------------
+#-----------------------------------------------------------------------
+# Step 8: Edit Data & also produce depth-time-series output via callback
+#-----------------------------------------------------------------------
 
 print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) output...");
 

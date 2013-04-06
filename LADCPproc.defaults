@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Wed May 16 15:22:36 2012
+#                    dlm: Tue Jan  8 15:31:40 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 28 25 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 51 63 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [LADCPproc]
@@ -26,6 +26,7 @@
 #	Jul 12, 2011: - added $PPI_editing_enabled
 #	Apr 11, 2012: - cosmetics
 #	May 16, 2012: - BUG: comment var name typo
+#	Jan  8, 2013: - added CTD_ASCII_header_lines
 
 #----------------------------------------------------------------------
 # ASCII CTD file support
@@ -45,8 +46,9 @@
 # $CTD_ASCII_lat_field 		= 4;
 # $CTD_ASCII_lon_field 		= 5;
 
-# The following variable is optional.
+# The following variables are optional:
 
+# $CTD_ASCII_header_lines	= 4;			# if this variable is defined, #-comments are disallowed
 # $CTD_ASCII_badval 		= 999;
 
 #----------------------------------------------------------------------

@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . L O A D C T D 
 #                    doc: Thu Dec  9 18:39:01 2010
-#                    dlm: Fri Oct 19 11:27:44 2012
+#                    dlm: Tue Jan  8 15:33:54 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 76 46 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 46 107 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -20,6 +20,7 @@
 #						 for binary files
 #				  - BUG: CTD_badval had not been considered when setting $CTD{first_elapsed}
 #				  - BUG: CNV format error was not detected correctly any more
+#   Jan  8, 2013: - added CTD_ASCII_header_lines
 
 sub readCTD_ASCII($$)
 {
@@ -38,9 +39,14 @@ sub readCTD_ASCII($$)
 	open(F,$fn) || croak("$fn: $!\n");
 	my($sumLat,$sumLon); my($nPos) = 0;
 	my($ds);
+	my($skip) = $CTD_ASCII_header_lines;
 	while (chomp($ds = <F>)) {
-		next if ($ds =~ /^#/);
-		$ds =~ s/^\s+//;					# strip leading spaces
+		if (defined($CTD_ASCII_header_lines)) {							# fixed header
+			next if ($skip-- > 0);
+		} else {														# comments beginning with # allowed
+			next if ($ds =~ /^#/);
+		}
+		$ds =~ s/^\s+//;												# strip leading spaces
 		my(@rec) = split('\s+',$ds);
 		push(@{$dtaR->{press}},($rec[$CTD_ASCII_press_field-1] == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_press_field-1]);
 		push(@{$dtaR->{temp}}, ($rec[$CTD_ASCII_temp_field-1]  == $CTD_ASCII_badval) ? nan : $rec[$CTD_ASCII_temp_field-1]);
