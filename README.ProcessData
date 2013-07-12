@@ -1,9 +1,9 @@
 ======================================================================
                     R E A D M E . P R O C E S S D A T A 
                     doc: Tue May 15 18:49:00 2012
-                    dlm: Fri Oct 19 10:58:34 2012
+                    dlm: Fri Jul 12 12:07:38 2013
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 42 35 NIL 0 0 72 75 2 8 NIL ofnI
+                    uE-Info: 118 71 NIL 0 0 72 75 2 8 NIL ofnI
 ======================================================================
 
 =Overview=
@@ -107,9 +107,15 @@ LADCPintsh -r 001.BT 001DL.sh > 001DL.vel
 	- this creates a BT-referenced absolute velocity profile from
 	  the DL shear data
 
+LADCPintsh -r 001.BT 001UL.sh > 001UL.vel
+	- this creates a BT-referenced absolute velocity profile from
+	  the UL shear and the DL BT data
+	- note that no -u is required in this case!
+
 LADCPintsh -r 001.BT -u 001UL.sh 001DL.sh > 001.vel
 	- this creates a BT-referenced absolute velocity profile from
 	  the combined DL/UL shear data
+	- note that -u is only required if both UL and DL data are used
 
 It is also possible to use SADCP data to reference the velocity
 profiles, although it is up to the user to create an input data file

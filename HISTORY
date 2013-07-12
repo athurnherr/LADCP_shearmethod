@@ -1,9 +1,9 @@
 ======================================================================
                     H I S T O R Y 
                     doc: Tue May 15 18:04:39 2012
-                    dlm: Fri Oct 19 11:51:45 2012
+                    dlm: Fri Jul 12 12:22:09 2013
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 50 38 NIL 0 0 72 3 2 8 NIL ofnI
+                    uE-Info: 56 0 NIL 0 0 72 3 2 8 NIL ofnI
 ======================================================================
 
 May 15, 2012:
@@ -50,3 +50,8 @@ Oct 19, 2012:
   - fixed bugs in [LADCPproc.loadCTD] [LADCPproc.bestLag]
   - added [README.TimeLagging]
   - updated docu
+
+Jul 12, 2013:
+  - V1.1 [.hg/hgrc] [LADCPproc.version]
+  - various improvements
+

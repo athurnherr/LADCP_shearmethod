@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Fri Mar 29 15:24:15 2013
+#                    dlm: Tue Jun 25 14:28:32 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 97 66 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 81 54 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -76,6 +76,9 @@
 #	Jun 13, 2012: - added CTD_depth to tds output
 #	Oct 28, 2012: - added -z
 #	Mar 16, 2013: - BUG: usage message had a -p)PI flag
+#	Jun  5, 2013: - added $bad_beam support
+#	Jun 25, 2013: - added %PARAMS used for spectral correction
+#				  - adapted to new ::-PARAM convention
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -149,7 +152,7 @@ if (defined($opt_c)) {
 $LADCP_file = &antsFileArg();
 $CTD_file   = &antsFileArg();
 
-&antsAddParams('LADCP_file',$LADCP_file,'CTD_file',$CTD_file);
+&antsAddParams('LADCPproc::LADCP_file',$LADCP_file,'LADCPproc::CTD_file',$CTD_file);
 &antsActivateOut();
 
 #----------------------------------------------------------------------
@@ -160,6 +163,8 @@ print(STDERR "Reading LADCP data ($LADCP_file)...");
 readData($LADCP_file,\%LADCP);
 printf(STDERR "\n\t%d ensembles",scalar(@{$LADCP{ENSEMBLE}})) if ($opt_d);
 print(STDERR "\n");
+
+&antsAddParams('LADCPproc::bin_length',$LADCP{BIN_LENGTH});
 
 #----------------------------------------------------------------------
 # Step 2: Set Processing Parameters
@@ -184,11 +189,13 @@ if ($LADCP{BLANKING_DISTANCE} == 0) {
     $BT_bin_start = 2 unless ($BT_bin_start > 2);
 }
 
-&antsAddParams('ADCP_orientation',
-        $LADCP{ENSEMBLE}[0]->{XDUCER_FACING_UP} ? 'uplooker' : 'downlooker');
+&antsAddParams('LADCPproc::instrument_orientation',
+        $LADCP{ENSEMBLE}[0]->{XDUCER_FACING_UP} ? 'UL' : 'DL');
 
 $SHEAR_PREGRID_DZ = 20;
 $GRID_DZ = $opt_o;
+
+&antsAddParams('LADCPproc::vertical_resolution',$GRID_DZ);
 
 #----------------------------------------------------------------------
 # Step 3: Read CTD data
@@ -269,6 +276,7 @@ print(STDERR "\n\tLADCP...") if ($opt_d);
 
 #-------------------------------------------------
 # transform to earth coordinates if required
+#	- discard data from a particular beam if requested
 #	- save beam_vels for later (e.g. wake) editing
 #-------------------------------------------------
 
@@ -280,11 +288,18 @@ $E = 3;
 $LADCP{HEADING_BIAS} = -$magdec;
 
 if ($LADCP{BEAM_COORDINATES}) {
-	print(STDERR "\n\t\ttransforming beam to Earth coordinates...")
-		if ($opt_d);
+	if ($opt_d) {
+		print(STDERR "\n\t\ttransforming beam to Earth coordinates...");
+		print(STDERR "\n\t\t\tdiscarding data from beam $bad_beam...")
+			if ($bad_beam);
+	}
 	for (my($ens)=0; $ens<=$#{$LADCP{ENSEMBLE}}; $ens++) {
 		$LADCP{ENSEMBLE}[$ens]->{TILT} = &angle_from_vertical($LADCP{ENSEMBLE}[$ens]->{PITCH},$LADCP{ENSEMBLE}[$ens]->{ROLL});
 		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+			if ($bad_beam) {
+				undef($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$bad_beam-1]);
+				undef($LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}[$bin][$bad_beam-1]);
+			}
 			@{$LADCP{ENSEMBLE}[$ens]->{BEAM_VEL}[$bin]} =  @{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]};
 			@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]} =
 				velInstrumentToEarth(\%LADCP,$ens,velBeamToInstrument(\%LADCP,@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]}));
@@ -300,7 +315,7 @@ if ($LADCP{BEAM_COORDINATES}) {
 	unless ($opt_4) {
 		print(STDERR "\n\t\t\t3-beam solutions: $RDI_Coords::threeBeam_1 $RDI_Coords::threeBeam_2 $RDI_Coords::threeBeam_3 $RDI_Coords::threeBeam_4\n")
 			if ($opt_d);
-		&antsAddParams('3_beam_solutions',"$RDI_Coords::threeBeam_1 $RDI_Coords::threeBeam_2 $RDI_Coords::threeBeam_3 $RDI_Coords::threeBeam_4");
+		&antsAddParams('LADCPproc::3_beam_solutions',"$RDI_Coords::threeBeam_1 $RDI_Coords::threeBeam_2 $RDI_Coords::threeBeam_3 $RDI_Coords::threeBeam_4");
 	}
 } elsif ($LADCP{EARTH_COORDINATES}) {
 	if ($opt_d) {
@@ -431,14 +446,14 @@ for (my($min_depth)=9e99,my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
     }
 }
 
-&antsAddParams('top_depth',round($LADCP{ENSEMBLE}[$LADCP_top]->{DEPTH}),
-			   'bottom_depth',round($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}),
-			   'start_date',$LADCP{ENSEMBLE}[$LADCP_start]->{DATE},
-			   'start_time',$LADCP{ENSEMBLE}[$LADCP_start]->{TIME},
-			   'bottom_date',$LADCP{ENSEMBLE}[$LADCP_bottom]->{DATE},
-			   'bottom_time',$LADCP{ENSEMBLE}[$LADCP_bottom]->{TIME},
-			   'end_date',$LADCP{ENSEMBLE}[$LADCP_end]->{DATE},
-			   'end_time',$LADCP{ENSEMBLE}[$LADCP_end]->{TIME});
+&antsAddParams('LADCPproc::min_depth',round($LADCP{ENSEMBLE}[$LADCP_top]->{DEPTH}),
+			   'LADCPproc::max_depth',round($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}),
+			   'LADCPproc::start_date',$LADCP{ENSEMBLE}[$LADCP_start]->{DATE},
+			   'LADCPproc::start_time',$LADCP{ENSEMBLE}[$LADCP_start]->{TIME},
+			   'LADCPproc::bottom_date',$LADCP{ENSEMBLE}[$LADCP_bottom]->{DATE},
+			   'LADCPproc::bottom_time',$LADCP{ENSEMBLE}[$LADCP_bottom]->{TIME},
+			   'LADCPproc::end_date',$LADCP{ENSEMBLE}[$LADCP_end]->{DATE},
+			   'LADCPproc::end_time',$LADCP{ENSEMBLE}[$LADCP_end]->{TIME});
 
 print(STDERR "\n");
 
@@ -521,9 +536,9 @@ print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) ou
 			for ($mingi=0; $mingi<@ush_vals; $mingi++) {
 				last if @{$ush_vals[$mingi]};
 	        }
-			&antsAddParams('min_ens',$LADCP_start,'min_elapsed',$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
-						   'max_ens',$LADCP_end,'max_elapsed',$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
-						   'min_depth',depthOfGI($mingi),'max_depth',depthOfGI($#ens_vals));
+			&antsAddParams('LADCPproc::min_ens',$LADCP_start,'LADCPproc::min_elapsed',$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+						   'LADCPproc::max_ens',$LADCP_end,'LADCPproc::max_elapsed',$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+						   'LADCPproc::min_depth',depthOfGI($mingi),'LADCPproc::max_depth',depthOfGI($#ens_vals));
 			for (my($gi)=0; $gi<@ush_vals; $gi++) {
 				for (my($i)=0; $i<@{$ush_vals[$gi]}; $i++){
 					&antsOut($ens_vals[$gi][$i],
@@ -551,25 +566,25 @@ print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) ou
 
 $commonParams = $antsCurParams;										# PARAMs added up to now are common to all output files
 
-&antsAddParams('ubin_start',$ubin_start,'ubin_end',$ubin_end,		# record processing params
-			   'wbin_start',$wbin_start,'wbin_end',$wbin_end,
-			   'shbin_start',$shbin_start,'shbin_end',$shbin_end,
-			   'w_ref_bin',$w_ref_bin,'w_dif',$w_dif,
-			   'wake_hd_dif',$wake_hd_dif,'wake_ang_min',$wake_ang_min,
-			   'min_wake_w',$min_wake_w,'n_wake_bins',$n_wake_bins,
-			   'e_max',$e_max,'min_cor',$min_cor,
-			   'max_shdev',$max_shdev,'max_shdev_sum',$max_shdev_sum,
-			   'water_depth',round($water_depth),'water_depth.sig',round($sig_water_depth),
-			   'min_hab',round($min_hab),'PPI_editing_enabled',$PPI_editing_enabled,
-			   'clip_margin',$clip_margin,'first_clip_bin',$first_clip_bin,
-			   'Svbin_start',$Svbin_start,'Svbin_end',$Svbin_end,
-			   'BT_bin_start',$BT_bin_start,'BT_bin_search_above',$BT_bin_search_above,
-			   'BT_max_bin_spread',$BT_max_bin_spread,'BT_max_w_difference',$BT_max_w_difference,
+&antsAddParams('LADCPproc::ubin_start',$ubin_start,'LADCPproc::ubin_end',$ubin_end,		# record processing params
+			   'LADCPproc::wbin_start',$wbin_start,'LADCPproc::wbin_end',$wbin_end,
+			   'LADCPproc::shbin_start',$shbin_start,'LADCPproc::shbin_end',$shbin_end,
+			   'LADCPproc::w_ref_bin',$w_ref_bin,'LADCPproc::w_dif',$w_dif,
+			   'LADCPproc::wake_hd_dif',$wake_hd_dif,'LADCPproc::wake_ang_min',$wake_ang_min,
+			   'LADCPproc::min_wake_w',$min_wake_w,'LADCPproc::n_wake_bins',$n_wake_bins,
+			   'LADCPproc::e_max',$e_max,'LADCPproc::min_cor',$min_cor,
+			   'LADCPproc::max_shdev',$max_shdev,'LADCPproc::max_shdev_sum',$max_shdev_sum,
+			   'LADCPproc::water_depth',round($water_depth),'LADCPproc::water_depth.sig',round($sig_water_depth),
+			   'LADCPproc::min_hab',round($min_hab),'LADCPproc::PPI_editing_enabled',$PPI_editing_enabled,
+			   'LADCPproc::clip_margin',$clip_margin,'LADCPproc::first_clip_bin',$first_clip_bin,
+			   'LADCPproc::Svbin_start',$Svbin_start,'LADCPproc::Svbin_end',$Svbin_end,
+			   'LADCPproc::BT_bin_start',$BT_bin_start,'LADCPproc::BT_bin_search_above',$BT_bin_search_above,
+			   'LADCPproc::BT_max_bin_spread',$BT_max_bin_spread,'LADCPproc::BT_max_w_difference',$BT_max_w_difference,
 );
 if (defined($BT_min_depth)) {
-	&antsAddParams('BT_min_depth',$BT_min_depth,'BT_max_depth',$BT_max_depth);
+	&antsAddParams('LADCPproc::BT_min_depth',$BT_min_depth,'LADCPproc::BT_max_depth',$BT_max_depth);
 } else {
-	&antsAddParams('BT_max_depth_error',$BT_max_depth_error);
+	&antsAddParams('LADCPproc::BT_max_depth_error',$BT_max_depth_error);
 }
 $fullParams = $antsCurParams;
 
@@ -693,11 +708,11 @@ if (defined($opt_a)) {
 	open(STDOUT,">$opt_a") || croak("$opt_a: $!\n");
 
 	$antsCurParams = $commonParams;
-	&antsAddParams('min_elapsed',$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
-				   'max_elapsed',$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
-				   'min_depth',$LADCP{ENSEMBLE}[$LADCP_top]->{XDUCER_FACING_UP} ?
+	&antsAddParams('LADCPproc::min_elapsed',$LADCP{ENSEMBLE}[$LADCP_start]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+				   'LADCPproc::max_elapsed',$LADCP{ENSEMBLE}[$LADCP_end]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+				   'LADCPproc::min_depth',$LADCP{ENSEMBLE}[$LADCP_top]->{XDUCER_FACING_UP} ?
 	   					&depthOfBin($LADCP_top,$LADCP{N_BINS}-1) : $LADCP{ENSEMBLE}[$LADCP_top]->{DEPTH},
-				   'max_depth',$LADCP{ENSEMBLE}[$LADCP_bottom]->{XDUCER_FACING_UP} ?
+				   'LADCPproc::max_depth',$LADCP{ENSEMBLE}[$LADCP_bottom]->{XDUCER_FACING_UP} ?
 	   					$LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH} : &depthOfBin($LADCP_bottom,$LADCP{N_BINS}-1)
 	);
 

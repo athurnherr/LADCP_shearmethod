@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Tue Jan  8 15:31:40 2013
+#                    dlm: Wed Jun  5 20:55:00 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 51 63 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 31 35 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [LADCPproc]
@@ -27,6 +27,20 @@
 #	Apr 11, 2012: - cosmetics
 #	May 16, 2012: - BUG: comment var name typo
 #	Jan  8, 2013: - added CTD_ASCII_header_lines
+#	Apr 22, 2013: - BUG: BT_begin_search_above value of 300m did not make sense
+#	Jun  5, 2013: - added $bad_beam
+
+#----------------------------------------------------------------------
+# Data editing
+#----------------------------------------------------------------------
+
+# Sometimes, an ADCP beam degrades to the point where its data contaminate 
+# the 4-beam solutions. Set the following variable to the number of the
+# bad beam to discard its data. This variable can also be used for crude
+# wake editing in cases where only a single beam is affected, which can
+# happen in particular with CTD platforms that tend to "weather vane".
+
+# $bad_beam = 1;
 
 #----------------------------------------------------------------------
 # ASCII CTD file support
@@ -78,9 +92,11 @@ $Svbin_end	 = 9;
 
 $BT_bin_start = 1;
 
-# CTD depth above seabed where BT search begins
+# By default, code looks for seabed below max LADCP depth. If search
+# is desired to start shallower (makes only sense on a steep slope, if
+# at all), the following variable can be set.
 
-$BT_begin_search_above = 300;
+$BT_begin_search_above = 0;
 
 # Maximum allowed spread of bin number where max echo is found. Large values
 # imply sloping seabed and/or large instrument tilt. The default value of

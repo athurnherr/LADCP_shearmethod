@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Wed Oct 24 23:21:52 2012
+#                    dlm: Fri Jul 12 12:18:07 2013
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 132 48 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 57 59 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -51,6 +51,10 @@ $antsSummary = 'integrate LADCP shear';
 #   May 16, 2012: - adapted to ANTSlib V5.0
 #	May 25, 2012: - added code to read LDEO_IX bottom-track data
 #	Jun 14, 2012: - noticed that -b now works also with LDEO SADCP files :-); renamed -b option to -r
+#	Jun  5, 2013: - BUG: code bombed when either UC or DC was missing
+#	Jun 28, 2013: - adapated to new :: convention
+#				  - make sure LADCP DUL metadata are dealt with correctly
+#	Jul 12, 2013: - clarified -u usage with better messages
 
 ($ANTS) = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
@@ -59,7 +63,7 @@ require "$ANTS/libstats.pl";
 &antsUsage('dm:n:r:s:w:u:',0,
 	'[-d)ebug]',
 	'[-r)eference with <BT or SADCP file> [-m)in <samp[10]>]]',
-	'[-u)plooker <binned shear file>]',
+	'[secondary -u)plooker <shear file>]',
 	'[min -n) <shear samp[10]>]',
 	'[output -s)hear-pro <file>]',
 	'[LADCP shear file]');
@@ -73,8 +77,10 @@ $minBTsamp = &antsCardOpt($opt_m,10);	# minimum number of samples for BT data
 &antsFileOpt($opt_r);		# reference velocity file
 
 &antsFileOpt($opt_u);		# UL shear file
-open(ULF,$opt_u) || croak("$opt_u: $!\n")
-	if defined($opt_u);
+if (defined($opt_u)) {
+	open(ULF,$opt_u) || croak("$opt_u: $!\n");
+	%UL_P = &antsFileParams(ULF);
+}
 
 #======================================================================
 # Step 1: Read and Average Shear Data
@@ -93,7 +99,31 @@ sub wavg_sig(@)
 }
 	
 
-$depthF = fnr('depth');									# layout of [LADCPproc] output
+#--------------------
+# Handle Metadata
+#--------------------
+
+if (%UL_P) {
+	croak("$0: inconsistent vertical resolution\n")
+		unless ($P{LADCPproc::vertical_resolution} == $UL_P{LADCPproc::vertical_resolution});
+
+	unless ($P{LADCPproc::bin_length} == $UL_P{LADCPproc::bin_length}) {
+		&antsInfo("Warnining: different DL/UL bin lengths; derived spectra cannot be corrected");
+		&antsAddParams('LADCPproc::bin_length','',
+					   'LADCPproc::DL_bin_length',$P{LADCPproc::bin_length},
+					   'LADCPproc::UL_bin_length',$UL_P{LADCPproc::bin_length});
+	}
+}
+
+$depthF = fnrNoErr('depth');									# layout of [LADCPproc] output
+unless (defined($depthF)) {
+	if (defined($opt_u)) {
+		croak("No 'depth' field in primary shear file (extraneous -u?)\n");
+	} else {
+		croak("No 'depth' field in primary shear file\n");
+	}
+}
+
 $dc_nshF = fnrNoErr('dc_nshear');
 $dc_nshF = fnr('dc_nsamp') unless defined($dc_nshF);
 $dc_uzF  = fnr('dc_u_z');
@@ -127,7 +157,7 @@ for (my($r)=0; &antsIn(); $r++) {
 		@UL_ = &antsFileIn(ULF);							# read UL shear data
 		undef($opt_u) unless (@UL_);						# cheap trick
 	}
-	
+
 	$depth[$r] = $ants_[0][$depthF];						## depth grid values
 	croak("$opt_u: inconsistent depth record $r (DL: $depth[$r]; UL: $UL_[$depthF])\n")
 		if defined($opt_u) && ($UL_[$depthF] != $depth[$r]);
@@ -506,8 +536,10 @@ unless (defined($dc_refU)) {
 			$dc_sumU += $dc_u[$r]; $dc_sumV += $dc_v[$r]; $dc_sumW += $dc_w[$r] if (@BT_w);
 		}
 	}
-	$dc_refU = $dc_sumU / $dc_nSumVel; $dc_refV = $dc_sumV / $dc_nSumVel;
-	$dc_refW = $dc_sumW / $dc_nSumVel if (@BT_w);
+	if ($dc_nSumVel) {
+		$dc_refU = $dc_sumU / $dc_nSumVel; $dc_refV = $dc_sumV / $dc_nSumVel;
+		$dc_refW = $dc_sumW / $dc_nSumVel if (@BT_w);
+	}
 }
 unless (defined($uc_refU)) {
 	my($uc_sumU,$uc_sumV,$uc_sumW,$uc_nSumVel);
@@ -517,8 +549,10 @@ unless (defined($uc_refU)) {
 			$uc_sumU += $uc_u[$r]; $uc_sumV += $uc_v[$r]; $uc_sumW += $uc_w[$r] if (@BT_w);
 		}
 	}
-	$uc_refU = $uc_sumU / $uc_nSumVel; $uc_refV = $uc_sumV / $uc_nSumVel;
-	$uc_refW = $uc_sumW / $uc_nSumVel if (@BT_w);
+	if ($uc_nSumVel) {
+		$uc_refU = $uc_sumU / $uc_nSumVel; $uc_refV = $uc_sumV / $uc_nSumVel;
+		$uc_refW = $uc_sumW / $uc_nSumVel if (@BT_w);
+	}
 }
 
 for (my($r)=0; $r<@depth; $r++) {							# reference velocities
@@ -537,15 +571,17 @@ for (my($r)=0; $r<@depth; $r++) {							# reference velocities
 # Determine X Factor
 #======================================================================
 
-my($first_w,$last_w);
-for (my($r)=0; !defined($first_w) || !defined($last_w); $r++) {
-	$first_w = $dc_w[$r] unless defined($first_w);
-	$last_w  = $uc_w[$r] unless defined($last_w);
+if ($dc_nSumVel && $uc_nSumVel) {
+	my($first_w,$last_w);
+	for (my($r)=0; !defined($first_w) || !defined($last_w); $r++) {
+		$first_w = $dc_w[$r] unless defined($first_w);
+		$last_w  = $uc_w[$r] unless defined($last_w);
+	}
+	
+	my($X_Factor) = 100 * abs($last_w-$first_w) / sqrt(@depth / $DZ);
+	&antsAddParams('X-Factor',$X_Factor);
+	printf(STDERR "X-Factor = %.1f\n",$X_Factor);
 }
-
-my($X_Factor) = 100 * abs($last_w-$first_w) / sqrt(@depth / $DZ);
-&antsAddParams('X-Factor',$X_Factor);
-printf(STDERR "X-Factor = %.1f\n",$X_Factor);
 
 #======================================================================
 # Output Velocity Profile

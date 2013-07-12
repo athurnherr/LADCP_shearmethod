@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B E S T L A G 
 #                    doc: Tue Sep 28 21:58:48 2010
-#                    dlm: Fri Oct 19 11:51:04 2012
+#                    dlm: Tue Jun 25 14:40:05 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 26 46 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 193 31 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # TODO:
@@ -24,6 +24,7 @@
 #					elapsed offsets
 #	May 18, 2012: - BUG: window start index was not always calculated correctly
 #	Oct 19, 2012: - BUG: opt_i had wrong sign!
+#	Jun 25, 2013: - adapted to :: %PARAM convention
 
 sub interp_LADCP_w($$)
 {
@@ -169,7 +170,7 @@ sub lagLADCP2CTD()
 		}
 	}
 	printf(STDERR "(x%d)",$nSame) if ($nSame > 1);
-    &antsAddParams('time_lags',$lags);
+    &antsAddParams('LADCPproc::time_lags',$lags);
 	
 	#----------------------
 	# find most popular lag
@@ -189,7 +190,7 @@ sub lagLADCP2CTD()
 		printf(STDERR "\n\t\tmost popular lag = %ds\n",($first_guess_lag+$best_lag)*$CTD{sampint});
 	}
 
-	&antsAddParams('LADCP_time_lag',($first_guess_lag + $best_lag) * $CTD{sampint});
+	&antsAddParams('LADCPproc::LADCP_time_lag',($first_guess_lag + $best_lag) * $CTD{sampint});
 	return ($first_guess_lag + $best_lag) * $CTD{sampint};
 }
 

@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . L O A D C T D 
 #                    doc: Thu Dec  9 18:39:01 2010
-#                    dlm: Tue Jan  8 15:33:54 2013
+#                    dlm: Tue Jun 25 14:42:50 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 46 107 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 25 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -21,6 +21,7 @@
 #				  - BUG: CTD_badval had not been considered when setting $CTD{first_elapsed}
 #				  - BUG: CNV format error was not detected correctly any more
 #   Jan  8, 2013: - added CTD_ASCII_header_lines
+#   Jun 25, 2013: - adapted to :: %PARAM convention
 
 sub readCTD_ASCII($$)
 {
@@ -95,18 +96,18 @@ sub readCTD_CNV($$)
 			$salinF = $1,next if ($hdr =~ /name (\d+) = sal00:/);
 		}
 	
-		&antsAddParams('start_time',$1),next							# selected metadata
+		&antsAddParams('LADCPproc::CTD_start_time',$1),next				# selected metadata
 			if ($hdr =~ /start_time = (.*)/);
 	
-		&antsAddParams('station',$1),next
+		&antsAddParams('LADCPproc::CTD_station',$1),next
 			if ($hdr =~ /Station\s*:\s*(.*)/);
-		&antsAddParams('ship',$1),next
+		&antsAddParams('LADCPproc::ship',$1),next
 			if ($hdr =~ /Ship\s*:\s*(.*)\s*$/);
-		&antsAddParams('cruise',$1),next
+		&antsAddParams('LADCPproc::cruise',$1),next
 			if ($hdr =~ /Cruise\s*:\s*(.*)\s*$/);
-		&antsAddParams('time',$1),next
+		&antsAddParams('LADCPproc::CTD_time',$1),next
 			if ($hdr =~ /Time\s*:\s*(.*)/);
-		&antsAddParams('date',$1),next
+		&antsAddParams('LADCPproc::CTD_date',$1),next
 			if ($hdr =~ /Date\s*:\s*(.*)/);
 	
 		if ($hdr =~ /Latitude\s*[=:]\s*/) {
@@ -198,7 +199,7 @@ sub readCTD($$)
 	croak("$0: unknown longitude\n") unless defined($dtaR->{lon});
 	&antsAddParams('lon',$dtaR->{lon});
 
-	&antsAddParams('CTD_sampfreq',1/$dtaR->{sampint});
+	&antsAddParams('LADCPproc::CTD_sampfreq',1/$dtaR->{sampint});
 	&antsAddParams('ITS',$P{ITS} = 90);
 }
 
