@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Wed Jun  5 20:55:00 2013
+#                    dlm: Tue Aug  6 20:57:30 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 31 35 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 33 66 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [LADCPproc]
@@ -29,6 +29,8 @@
 #	Jan  8, 2013: - added CTD_ASCII_header_lines
 #	Apr 22, 2013: - BUG: BT_begin_search_above value of 300m did not make sense
 #	Jun  5, 2013: - added $bad_beam
+#	Sep  6, 2013: - BUG: BT_begin_search_above value of 300m was correct; 
+#						 the original bug was in the documentation
 
 #----------------------------------------------------------------------
 # Data editing
@@ -92,11 +94,10 @@ $Svbin_end	 = 9;
 
 $BT_bin_start = 1;
 
-# By default, code looks for seabed below max LADCP depth. If search
-# is desired to start shallower (makes only sense on a steep slope, if
-# at all), the following variable can be set.
+# Apparently valid BT data collected at distances greater than 300m 
+# from the seabed are discarded.
 
-$BT_begin_search_above = 0;
+$BT_begin_search_above = 300;
 
 # Maximum allowed spread of bin number where max echo is found. Large values
 # imply sloping seabed and/or large instrument tilt. The default value of

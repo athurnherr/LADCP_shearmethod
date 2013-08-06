@@ -1,9 +1,9 @@
 ======================================================================
                     H I S T O R Y 
                     doc: Tue May 15 18:04:39 2012
-                    dlm: Fri Jul 12 12:22:09 2013
+                    dlm: Tue Aug  6 20:59:38 2013
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 56 0 NIL 0 0 72 3 2 8 NIL ofnI
+                    uE-Info: 61 37 NIL 0 0 72 3 2 8 NIL ofnI
 ======================================================================
 
 May 15, 2012:
@@ -54,4 +54,9 @@ Oct 19, 2012:
 Jul 12, 2013:
   - V1.1 [.hg/hgrc] [LADCPproc.version]
   - various improvements
+  - DEFAULT VALUES PREVENTS EXTRACTION OF BT DATA
+
+Aug  6, 2013:
+  - V1.2 [.hg/hgrc] [LADCPproc.version]
+  - but fixed in [LADCPproc.defaults]
 
