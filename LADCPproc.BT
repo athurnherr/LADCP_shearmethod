@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B T 
 #                    doc: Wed Oct 20 21:05:37 2010
-#                    dlm: Wed May 16 18:45:15 2012
+#                    dlm: Thu Sep 19 13:17:41 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 16 51 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 119 96 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -14,6 +14,7 @@
 #				  - added $BT processing parameters
 #				  - changed from echo amplitude to Sv
 #	May 16, 2012: - added support for -r)DI BT data
+#	Sep 19, 2013: - added support for $BT_range_method
 
 my($BEAM1) = 0;
 my($BEAM2) = 1;
@@ -62,36 +63,66 @@ sub CTDvelFromSv($)
 		unless defined($BT_min_depth) ||
 			   (abs($water_depth-depthOfBin($ens,$range_bin)) < $sig_water_depth + $BT_max_depth_error);
 
-	# try bin of max plus one above and below
-	# this does not really work because, often, only one of the bins has valid velocities
-	my($w1) = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$W];
-	my($w2) = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$W];
-	my($w3) = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$W];
-
-	printf(STDERR "w123 = %.1f,%.1f,%.1f\n",$w1,$w2,$w3)
-		if ($DEBUG);
-
-	$w1 = 9e99 unless numberp($w1);									# no valid velocities
-	$w2 = 9e99 unless numberp($w1);
-	$w3 = 9e99 unless numberp($w1);
-
 	my($CTD_u,$CTD_v,$CTD_w);
+	
+	if ($BT_range_method == 0) {										# take BT vel from bin with Sv max
+		
+		$nBTvalidVelFlag++,return unless numberp($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$W]);
+		$CTD_u = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$U];
+		$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$V];
+		$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$W];
+		
+	} elsif ($BT_range_method == 1) {									# take "best-fit" with w_reflr
 
-	if (abs($LADCP{ENSEMBLE}[$ens]->{W}-$w1) < abs($LADCP{ENSEMBLE}[$ens]->{W}-$w2) &&
-		abs($LADCP{ENSEMBLE}[$ens]->{W}-$w1) < abs($LADCP{ENSEMBLE}[$ens]->{W}-$w3)) {
-			$CTD_u = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$U];
-			$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$V];
-			$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$W];
-	} elsif (abs($LADCP{ENSEMBLE}[$ens]->{W}-$w1) < abs($LADCP{ENSEMBLE}[$ens]->{W}-$w2)) {
-			$CTD_u = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$U];
-			$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$V];
-			$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$W];
+		# try bin of max plus one above and below
+		# this does not really work because, often, only one of the bins has valid velocities
+		my($w1) = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$W];
+		my($w2) = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$W];
+		my($w3) = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$W];
+	
+		printf(STDERR "w123 = %.1f,%.1f,%.1f\n",$w1,$w2,$w3)
+			if ($DEBUG);
+	
+		$w1 = 9e99 unless numberp($w1); 								# no valid velocities
+		$w2 = 9e99 unless numberp($w1);
+		$w3 = 9e99 unless numberp($w1);
+	
+		if (abs($LADCP{ENSEMBLE}[$ens]->{W}-$w1) < abs($LADCP{ENSEMBLE}[$ens]->{W}-$w2) &&
+			abs($LADCP{ENSEMBLE}[$ens]->{W}-$w1) < abs($LADCP{ENSEMBLE}[$ens]->{W}-$w3)) {
+				$CTD_u = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$U];
+				$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$V];
+				$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin-1][$W];
+		} elsif (abs($LADCP{ENSEMBLE}[$ens]->{W}-$w1) < abs($LADCP{ENSEMBLE}[$ens]->{W}-$w2)) {
+				$CTD_u = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$U];
+				$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$V];
+				$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+1][$W];
+		} else {
+				$nBTvalidVelFlag++,return if ($w2 == 9e99); 			# none of 3 bins has valid velocity
+				$CTD_u = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$U];
+				$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$V];
+				$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$W];
+	    }
+
+	} elsif ($BT_range_method == 2) {									# Visbeck method (median from 3 bins)
+		croak("$0: need \$BT_range_Visbeck_center\n")
+			unless defined($BT_range_Visbeck_center);
+
+		$CTD_u = median($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+$BT_range_Visbeck_center+1][$U],
+						$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+$BT_range_Visbeck_center][$U],
+						$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+$BT_range_Visbeck_center-1][$U]);
+		$nBTvalidVelFlag++,return unless numberp($CTD_u);
+		$CTD_v = median($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+$BT_range_Visbeck_center+1][$V],
+						$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+$BT_range_Visbeck_center][$V],
+						$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+$BT_range_Visbeck_center-1][$V]);
+		$CTD_w = median($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+$BT_range_Visbeck_center+1][$W],
+						$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+$BT_range_Visbeck_center][$W],
+						$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin+$BT_range_Visbeck_center-1][$W]);
+		
 	} else {
-			$nBTvalidVelFlag++,return if ($w2 == 9e99);				# none of 3 bins has valid velocity
-			$CTD_u = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$U];
-			$CTD_v = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$V];
-			$CTD_w = $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$range_bin][$W];
+		
+		croak("$0: unknown \$BT_range_method == $BT_range_method\n");
 	}
+			
 
 	return ($CTD_u,$CTD_v,$CTD_w);
 }

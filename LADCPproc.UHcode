@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . U H C O D E 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Wed Apr 11 19:22:44 2012
+#                    dlm: Wed Sep 25 12:29:46 2013
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 38 46 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 39 47 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from Eric's [merge.c]; with mods
@@ -36,6 +36,7 @@
 #	Jul 12, 2011: - replaced -p by $PPI_editing_enabled flag
 #	Feb 19, 2012: - added elapsed time to binned shear output
 #	Apr 11, 2012: - added MISSING_CTD_DATA_BIT
+#	Sep 25, 2013: - added code to calc gridded lat/lon info
 
 #======================================================================
 # VELOCITY EDITING
@@ -286,6 +287,7 @@ sub edit_velocity($$)
 # CALCULATE VELOCITY SHEAR
 #	- final output in @ush_mu,@vsh_mu,@wsh_mu,@ush_sig,@vsh_sig,@wsh_sig
 #		NEW (ant): elapsed time output in @esh_mu
+#				   lat/lon output in @lash_mu, @losh_mu
 # 	- @sh_i0, @sh_i1, @dsh, @ush, @vsh, @wsh are defined "local" in calc_shear
 #======================================================================
 
@@ -408,11 +410,11 @@ sub calc_shear($$$$)
 
 	outTDseries($De==1) if ($edit_shear);								# output depth-time time series
 
-	@ush_mu  = @vsh_mu  = @wsh_mu  = @esh_mu  = ();
+	@ush_mu  = @vsh_mu  = @wsh_mu  = @esh_mu = @lash_mu = @losh_mu = ();
 	@ush_sig = @vsh_sig = @wsh_sig = ();
 
 	for (my($gi)=0; $gi<@ush_vals; $gi++) {								# calc grid means & stddev
-		my($sum_ush,$sum_vsh,$sum_wsh,$sum_esh);
+		my($sum_ush,$sum_vsh,$sum_wsh,$sum_esh,$sum_lash,$sum_losh);
 
 		$sh_n[$gi] = @{$ush_vals[$gi]};
 		
@@ -421,11 +423,15 @@ sub calc_shear($$$$)
 			$sum_vsh += $vsh_vals[$gi][$vi];
 			$sum_wsh += $wsh_vals[$gi][$vi];
 			$sum_esh += $LADCP{ENSEMBLE}[$ens_vals[$gi][$vi]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l;
+			$sum_lash += $LADCP{ENSEMBLE}[$ens_vals[$gi][$vi]]->{CTD_LAT};
+			$sum_losh += $LADCP{ENSEMBLE}[$ens_vals[$gi][$vi]]->{CTD_LON};
 		}
 		$ush_mu[$gi] = $sh_n[$gi] ? $sum_ush/$sh_n[$gi] : nan;
 		$vsh_mu[$gi] = $sh_n[$gi] ? $sum_vsh/$sh_n[$gi] : nan;
 		$wsh_mu[$gi] = $sh_n[$gi] ? $sum_wsh/$sh_n[$gi] : nan;
 		$esh_mu[$gi] = $sh_n[$gi] ? $sum_esh/$sh_n[$gi] : nan;
+		$lash_mu[$gi] = $sh_n[$gi] ? $sum_lash/$sh_n[$gi] : nan;
+		$losh_mu[$gi] = $sh_n[$gi] ? $sum_losh/$sh_n[$gi] : nan;
 	}
 
 	for (my($gi)=0; $gi<@ush_vals; $gi++) {								# calc & grid stddevs

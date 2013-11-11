@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Tue Jun 25 14:28:32 2013
+#                    dlm: Wed Sep 25 13:09:21 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 81 54 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 84 61 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -79,6 +79,9 @@
 #	Jun  5, 2013: - added $bad_beam support
 #	Jun 25, 2013: - added %PARAMS used for spectral correction
 #				  - adapted to new ::-PARAM convention
+#	Sep 25, 2013: - BUG: %PARAM magnetic_declination did not have LADCPproc:: prefix
+#				  - added CTD lat/lon info to most output files (but not BT)
+#				  - BUG: moved %water_depth to common %PARAMs
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -138,9 +141,9 @@ if (defined($opt_u)) {
 }
 
 if (defined($opt_g)) {
-    ($CTD{lat},$CTD{lon}) = split(',',$opt_g);
+    ($CTD{stn_lat},$CTD{stn_lon}) = split(',',$opt_g);
     croak("$0: cannot decode -g $opt_g\n")
-        unless numberp($CTD{lat}) && numberp($CTD{lon});
+        unless numberp($CTD{stn_lat}) && numberp($CTD{stn_lon});
 }
 
 if (defined($opt_c)) {
@@ -209,12 +212,12 @@ print(STDERR "\n");
 my($year)  = substr($LADCP{ENSEMBLE}[0]->{DATE},6,4);
 my($month) = substr($LADCP{ENSEMBLE}[0]->{DATE},0,2);
 my($day  ) = substr($LADCP{ENSEMBLE}[0]->{DATE},3,2);
-my($magdec,$maginc,$h_strength,$v_strength) = split('\s+',`magdec $CTD{lon} $CTD{lat} $year $month $day`);
+my($magdec,$maginc,$h_strength,$v_strength) = split('\s+',`magdec $CTD{stn_lon} $CTD{stn_lat} $year $month $day`);
 
 croak("$0: unknown magnetic declination\n")
 	unless defined($magdec);
 
-&antsAddParams('magnetic_declination',$magdec);
+&antsAddParams('LADCPproc::magnetic_declination',$magdec);
 
 #----------------------------------------------------------------------
 # Step 4: Pre-Process CTD & LADCP Data
@@ -424,7 +427,7 @@ for (my($min_depth)=9e99,my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
 	}
 	my($dr);
 	for ($dr=0; !numberp($CTD{press}[$r+$dr]); $dr--) {}
-	$LADCP{ENSEMBLE}[$ens]->{DEPTH} = depth($CTD{press}[$r+$dr],$CTD{lat});
+	$LADCP{ENSEMBLE}[$ens]->{DEPTH} = depth($CTD{press}[$r+$dr],$CTD{stn_lat});
 	if ($LADCP{ENSEMBLE}[$ens]->{DEPTH} < $min_depth) {
 		$min_depth = $LADCP{ENSEMBLE}[$ens]->{DEPTH};
 		$LADCP_top = $ens;
@@ -444,16 +447,24 @@ for (my($min_depth)=9e99,my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
 		$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$V] *= $sscorr;
 		$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W] *= $sscorr;
     }
+    $LADCP{ENSEMBLE}[$ens]->{CTD_LAT} = $CTD{lat}[$r];
+    $LADCP{ENSEMBLE}[$ens]->{CTD_LON} = $CTD{lon}[$r];
 }
 
 &antsAddParams('LADCPproc::min_depth',round($LADCP{ENSEMBLE}[$LADCP_top]->{DEPTH}),
 			   'LADCPproc::max_depth',round($LADCP{ENSEMBLE}[$LADCP_bottom]->{DEPTH}),
 			   'LADCPproc::start_date',$LADCP{ENSEMBLE}[$LADCP_start]->{DATE},
 			   'LADCPproc::start_time',$LADCP{ENSEMBLE}[$LADCP_start]->{TIME},
+			   'LADCPproc::start_lat',$LADCP{ENSEMBLE}[$LADCP_start]->{CTD_LAT},
+			   'LADCPproc::start_lon',$LADCP{ENSEMBLE}[$LADCP_start]->{CTD_LON},
 			   'LADCPproc::bottom_date',$LADCP{ENSEMBLE}[$LADCP_bottom]->{DATE},
 			   'LADCPproc::bottom_time',$LADCP{ENSEMBLE}[$LADCP_bottom]->{TIME},
+			   'LADCPproc::bottom_lat',$LADCP{ENSEMBLE}[$LADCP_bottom]->{CTD_LAT},
+			   'LADCPproc::bottom_lon',$LADCP{ENSEMBLE}[$LADCP_bottom]->{CTD_LON},
 			   'LADCPproc::end_date',$LADCP{ENSEMBLE}[$LADCP_end]->{DATE},
-			   'LADCPproc::end_time',$LADCP{ENSEMBLE}[$LADCP_end]->{TIME});
+			   'LADCPproc::end_time',$LADCP{ENSEMBLE}[$LADCP_end]->{TIME},
+			   'LADCPproc::end_lat',$LADCP{ENSEMBLE}[$LADCP_end]->{CTD_LAT},
+			   'LADCPproc::end_lon',$LADCP{ENSEMBLE}[$LADCP_end]->{CTD_LON});
 
 print(STDERR "\n");
 
@@ -513,13 +524,16 @@ if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
 		if ($opt_d);
 }
 
+&antsAddParams('LADCPproc::water_depth',round($water_depth),
+			   'LADCPproc::water_depth.sig',round($sig_water_depth));
+
 #-----------------------------------------------------------------------
 # Step 8: Edit Data & also produce depth-time-series output via callback
 #-----------------------------------------------------------------------
 
 print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) output...");
 
-@antsNewLayout = ('ens','elapsed','CTD_depth','downcast','depth','u_z','v_z','w_z');
+@antsNewLayout = ('ens','elapsed','CTD_depth','downcast','CTD_lat','CTD_lon','depth','u_z','v_z','w_z');
 
 	#--------------------------------------------------------------------------------
 	# callback routine to output .tds data, called once each for down-/upcasts after
@@ -544,6 +558,8 @@ print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) ou
 					&antsOut($ens_vals[$gi][$i],
 							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
 							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{DEPTH},$downcast,
+							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LAT},
+							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LON},
 							 depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
 				}
 	        }
@@ -553,6 +569,8 @@ print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) ou
 					&antsOut($ens_vals[$gi][$i],
 							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
 							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{DEPTH},$downcast,
+							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LAT},
+							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LON},
 							 depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
 				}
 	        }
@@ -574,14 +592,13 @@ $commonParams = $antsCurParams;										# PARAMs added up to now are common to 
 			   'LADCPproc::min_wake_w',$min_wake_w,'LADCPproc::n_wake_bins',$n_wake_bins,
 			   'LADCPproc::e_max',$e_max,'LADCPproc::min_cor',$min_cor,
 			   'LADCPproc::max_shdev',$max_shdev,'LADCPproc::max_shdev_sum',$max_shdev_sum,
-			   'LADCPproc::water_depth',round($water_depth),'LADCPproc::water_depth.sig',round($sig_water_depth),
 			   'LADCPproc::min_hab',round($min_hab),'LADCPproc::PPI_editing_enabled',$PPI_editing_enabled,
 			   'LADCPproc::clip_margin',$clip_margin,'LADCPproc::first_clip_bin',$first_clip_bin,
 			   'LADCPproc::Svbin_start',$Svbin_start,'LADCPproc::Svbin_end',$Svbin_end,
 			   'LADCPproc::BT_bin_start',$BT_bin_start,'LADCPproc::BT_bin_search_above',$BT_bin_search_above,
 			   'LADCPproc::BT_max_bin_spread',$BT_max_bin_spread,'LADCPproc::BT_max_w_difference',$BT_max_w_difference,
 );
-if (defined($BT_min_depth)) {
+if (defined($BT_min_depth)) {										# BT-related params
 	&antsAddParams('LADCPproc::BT_min_depth',$BT_min_depth,'LADCPproc::BT_max_depth',$BT_max_depth);
 } else {
 	&antsAddParams('LADCPproc::BT_max_depth_error',$BT_max_depth_error);
@@ -600,6 +617,7 @@ calc_shear($LADCP_start,$LADCP_bottom,$GRID_DZ,1);					# calculate final gridded
 @dc_vsh_mu = @vsh_mu; @dc_vsh_sig = @vsh_sig;
 @dc_wsh_mu = @wsh_mu; @dc_wsh_sig = @wsh_sig;
 @dc_esh_mu = @esh_mu;
+@dc_lash_mu = @lash_mu; @dc_losh_mu = @losh_mu;
 
 print(STDERR "\n\tupcast...") if ($opt_d);
 edit_velocity($LADCP_end,$LADCP_bottom);							# upcast
@@ -611,6 +629,7 @@ calc_shear($LADCP_end,$LADCP_bottom,$GRID_DZ,1);
 @uc_vsh_mu = @vsh_mu; @uc_vsh_sig = @vsh_sig;
 @uc_wsh_mu = @wsh_mu; @uc_wsh_sig = @wsh_sig;
 @uc_esh_mu = @esh_mu;
+@uc_lash_mu = @lash_mu; @uc_losh_mu = @losh_mu;
 
 print(STDERR "\n\tcombined...") if ($opt_d);
 my($nsh) = (@dc_ush_mu > @uc_ush_mu) ? scalar(@dc_ush_mu) : scalar(@uc_ush_mu);
@@ -659,8 +678,8 @@ if (defined($opt_p)) {
 
 	print(STDERR "Writing shear profiles...");
 	
-	@antsNewLayout = ('depth','dc_elapsed','dc_nsamp','dc_u_z','dc_u_z.sig','dc_v_z','dc_v_z.sig','dc_w_z','dc_w_z.sig',
-							  'uc_elapsed','uc_nsamp','uc_u_z','uc_u_z.sig','uc_v_z','uc_v_z.sig','uc_w_z','uc_w_z.sig',
+	@antsNewLayout = ('depth','dc_elapsed','dc_lat','dc_lon','dc_nsamp','dc_u_z','dc_u_z.sig','dc_v_z','dc_v_z.sig','dc_w_z','dc_w_z.sig',
+							  'uc_elapsed','uc_lat','uc_lon','uc_nsamp','uc_u_z','uc_u_z.sig','uc_v_z','uc_v_z.sig','uc_w_z','uc_w_z.sig',
 							  'elapsed','nsamp','u_z','u_z.sig','v_z','v_z.sig','w_z','w_z.sig','Sv','Sv.nsamp');
 							  
 	&antsOut('EOF');
@@ -671,12 +690,12 @@ if (defined($opt_p)) {
 
 	for (my($gi)=0; $gi<$nsh; $gi++) {
 		&antsOut(depthOfGI($gi),										# depth in center of bin
-				 $dc_esh_mu[$gi],										# downcast
+				 $dc_esh_mu[$gi],$dc_lash_mu[$gi],$dc_losh_mu[$gi],		# downcast
 				 numberp($dc_sh_n[$gi])?$dc_sh_n[$gi]:0,
 				 $dc_ush_mu[$gi],$dc_ush_sig[$gi],
 				 $dc_vsh_mu[$gi],$dc_vsh_sig[$gi],
 				 $dc_wsh_mu[$gi],$dc_wsh_sig[$gi],
-				 $uc_esh_mu[$gi],										# upcast
+				 $uc_esh_mu[$gi],$uc_lash_mu[$gi],$uc_losh_mu[$gi],		# upcast
 				 numberp($uc_sh_n[$gi])?$uc_sh_n[$gi]:0,
 				 $uc_ush_mu[$gi],$uc_ush_sig[$gi],
 				 $uc_vsh_mu[$gi],$uc_vsh_sig[$gi],
@@ -701,7 +720,7 @@ if (defined($opt_a)) {
 	print(STDERR "Writing acoustic backscatter depth-time-series to <$opt_a>...");
 
 	
-	@antsNewLayout = ('ens','elapsed','CTD_depth','depth','bin','downcast',
+	@antsNewLayout = ('ens','elapsed','CTD_depth','CTD_lat','CTD_lon','depth','bin','downcast',
 					  'Sv_beam1','Sv_beam2','Sv_beam3','Sv_beam4','Sv.median');
 	&antsOut('EOF');
     close(STDOUT);
@@ -721,6 +740,7 @@ if (defined($opt_a)) {
 			&antsOut($LADCP{ENSEMBLE}[$ens]->{NUMBER},
 					 $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
 					 $LADCP{ENSEMBLE}[$ens]->{DEPTH},
+					 $LADCP{ENSEMBLE}[$ens]->{CTD_LAT},$LADCP{ENSEMBLE}[$ens]->{CTD_LON},
 					 &depthOfBin($ens,$bin),$bin+1,
 					 ($ens <= $LADCP_bottom) ? 1 : 0,
 					 @{$LADCP{ENSEMBLE}[$ens]->{SV}[$bin]},
@@ -737,7 +757,7 @@ if (defined($opt_a)) {
 if (defined($opt_t)) {
 	print(STDERR "Writing time series to <$opt_t>...");
 	
-	@antsNewLayout = ('ens','elapsed','depth','CTD_w','LADCP_w');
+	@antsNewLayout = ('ens','elapsed','depth','CTD_lat','CTD_lon','CTD_w','LADCP_w');
 	&antsOut('EOF');
 	$antsCurParams = $commonParams;
 	close(STDOUT);
@@ -747,6 +767,8 @@ if (defined($opt_t)) {
 		&antsOut($LADCP{ENSEMBLE}[$ens]->{NUMBER},
 				 $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
 				 $LADCP{ENSEMBLE}[$ens]->{DEPTH},
+				 $LADCP{ENSEMBLE}[$ens]->{CTD_LAT},
+				 $LADCP{ENSEMBLE}[$ens]->{CTD_LON},
 				 $LADCP{ENSEMBLE}[$ens]->{CTD_W},
 				 $LADCP{ENSEMBLE}[$ens]->{W});
 	}

@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Tue Aug  6 20:57:30 2013
+#                    dlm: Thu Sep 19 13:34:34 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 33 66 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 142 75 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [LADCPproc]
@@ -31,6 +31,7 @@
 #	Jun  5, 2013: - added $bad_beam
 #	Sep  6, 2013: - BUG: BT_begin_search_above value of 300m was correct; 
 #						 the original bug was in the documentation
+#	Sep 19, 2013: - added support for $BT_range_method
 
 #----------------------------------------------------------------------
 # Data editing
@@ -117,7 +118,7 @@ $BT_max_bin_spread = 3;
 
 # Maximum difference between water depth and average distance of echo max.,
 # if $BT_min_depth and $BT_max_depth are not set. The stddev of the detected
-# water depth is added To this number.
+# water depth is added to this number.
 
 $BT_max_depth_error = 20;
 
@@ -126,6 +127,21 @@ $BT_max_depth_error = 20;
 # vertical velocity, e.g. due to cross-slope currents.
 
 $BT_max_w_difference = 0.03;
+
+# When the BT velocity is taken from the wrong bin, the measurement is not
+# taken from the main acoustic beam but, rather, from a side lobe. As a
+# result, the BT measurement is biased, causing biased near-bottom LADCP
+# velocities when the instrument is moving horizontally.
+# Methods:
+#	0: Take BT velocity from bin with max(Sv). Not recommended.
+#	1: Chose either bin at max(Sv) or one of its neighbors, 
+#	   depending which shows the smallest discrepancy between w_BT and w_reflr. 
+#	   Causes underestimation of instrument speed in P403 tow-yos.
+#	2: Visbeck (2002): use median from 3 bins. Requires $BT_range_Visbeck_center
+#	   to define where the 3 bins should be centered wrt. the max(Sv) bin.
+#	   Visbeck suggests +1. Based on P403 tow-yo 030 it looks more like -2.
+
+$BT_range_method = 1;		
 
 #----------------------------------------------------------------------
 # Shear Processing Parameters

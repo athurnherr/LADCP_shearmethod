@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . L O A D C T D 
 #                    doc: Thu Dec  9 18:39:01 2010
-#                    dlm: Tue Jun 25 14:42:50 2013
+#                    dlm: Wed Sep 25 12:59:57 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 25 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 210 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -22,6 +22,8 @@
 #				  - BUG: CNV format error was not detected correctly any more
 #   Jan  8, 2013: - added CTD_ASCII_header_lines
 #   Jun 25, 2013: - adapted to :: %PARAM convention
+#	Sep 25, 2013: - renamed "std" %PARAMs %lat, %lon, %ITS to conform to new convention
+#				  - added support for carry-through of lat/lon info
 
 sub readCTD_ASCII($$)
 {
@@ -30,7 +32,7 @@ sub readCTD_ASCII($$)
 	croak("$fn: unknown pressure field\n")    unless defined($CTD_ASCII_press_field);
 	croak("$fn: unknown temperature field\n") unless defined($CTD_ASCII_temp_field);
 	croak("$fn: unknown salinity field\n")    unless defined($CTD_ASCII_salin_field);
-	unless (numberp($dtaR->{lat})) {
+	unless (numberp($dtaR->{stn_lat})) {
 		croak("$fn: unknown latitude field\n")    unless defined($CTD_ASCII_lat_field);
 		croak("$fn: unknown longitude field\n")   unless defined($CTD_ASCII_lon_field);
 	}
@@ -55,16 +57,21 @@ sub readCTD_ASCII($$)
 		if (defined($CTD_ASCII_lat_field) &&
 		    numberp($rec[$CTD_ASCII_lat_field-1]) &&
 			$rec[$CTD_ASCII_lat_field-1] != $CTD_ASCII_badval) {
+				push(@{$dtaR->{lat}},$rec[$CTD_ASCII_lat_field-1]);
+				push(@{$dtaR->{lon}},$rec[$CTD_ASCII_lon_field-1]);
 				$nPos++;
 				$sumLat += $rec[$CTD_ASCII_lat_field-1];
 				$sumLon += $rec[$CTD_ASCII_lon_field-1];
+		} else {
+			push(@{$dtaR->{lat}},nan);
+			push(@{$dtaR->{lon}},nan);
 		}
 	}
 	close(F);
 	
 	if ($nPos > 0) {
-		$dtaR->{lat} = $sumLat / $nPos;
-		$dtaR->{lon} = $sumLon / $nPos;
+		$dtaR->{stn_lat} = $sumLat / $nPos;
+		$dtaR->{stn_lon} = $sumLon / $nPos;
 	}
 
 	$dtaR->{sampint} = 1 / $CTD_ASCII_sampfreq;
@@ -95,6 +102,8 @@ sub readCTD_CNV($$)
 			$tempF	= $1,next if ($hdr =~ /name (\d+) = t090C:/);
 			$salinF = $1,next if ($hdr =~ /name (\d+) = sal00:/);
 		}
+		$latF = $1,next if ($hdr =~ /name (\d+) = latitude:/);
+		$lonF = $1,next if ($hdr =~ /name (\d+) = longitude:/);
 	
 		&antsAddParams('LADCPproc::CTD_start_time',$1),next				# selected metadata
 			if ($hdr =~ /start_time = (.*)/);
@@ -112,14 +121,14 @@ sub readCTD_CNV($$)
 	
 		if ($hdr =~ /Latitude\s*[=:]\s*/) {
 			($deg,$min,$NS) = split(/ /,$');
-			$dtaR->{lat} = $deg + $min/60;
-			$dtaR->{lat} *= -1 if ($NS eq 'S');
+			$dtaR->{stn_lat} = $deg + $min/60;
+			$dtaR->{stn_lat} *= -1 if ($NS eq 'S');
 			next;
 		}
 		if ($hdr =~ /Longitude\s*[=:]\s*/) {
 			($deg,$min,$EW) = split(/ /,$');
-			$dtaR->{lon} = $deg + $min/60;
-			$dtaR->{lon} *= -1 if ($EW eq 'W');
+			$dtaR->{stn_lon} = $deg + $min/60;
+			$dtaR->{stn_lon} *= -1 if ($EW eq 'W');
 			next;
 		}
 	    
@@ -155,6 +164,8 @@ sub readCTD_CNV($$)
 			push(@{$dtaR->{press}},($rec[$pressF] == $CTD_badval) ? nan : $rec[$pressF]);
 			push(@{$dtaR->{temp}}, ($rec[$tempF]  == $CTD_badval) ? nan : $rec[$tempF]);
 			push(@{$dtaR->{salin}},($rec[$salinF] == $CTD_badval) ? nan : $rec[$salinF]);
+			push(@{$dtaR->{press}},(!defined($latF) || ($rec[$latF] == $CTD_badval)) ? nan : $rec[$latF]);
+			push(@{$dtaR->{press}},(!defined($lonF) || ($rec[$lonF] == $CTD_badval)) ? nan : $rec[$lonF]);
 		}
 	} elsif ($CTD_file_type eq 'binary') {
 	
@@ -177,6 +188,8 @@ sub readCTD_CNV($$)
 			push(@{$dtaR->{press}},($dta[$r*$CTD_nfields+$pressF] == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$pressF]);
 			push(@{$dtaR->{temp}}, ($dta[$r*$CTD_nfields+$tempF]  == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$tempF]);
 			push(@{$dtaR->{salin}},($dta[$r*$CTD_nfields+$salinF] == $CTD_badval) ? nan : $dta[$r*$CTD_nfields+$salinF]);
+			push(@{$dtaR->{lat}},(!defined($latF) || ($dta[$r*$CTD_nfields+$latF] == $CTD_badval)) ? nan : $dta[$r*$CTD_nfields+$latF]);
+			push(@{$dtaR->{lon}},(!defined($lonF) || ($dta[$r*$CTD_nfields+$lonF] == $CTD_badval)) ? nan : $dta[$r*$CTD_nfields+$lonF]);
 		}
 	} else {
 		croak("$fn: unknown CTD file type $CTD_file_type\n");
@@ -194,13 +207,13 @@ sub readCTD($$)
 		readCTD_CNV($fn,$dtaR);
 	}
 
-	croak("$0: unknown latitude\n") unless defined($dtaR->{lat});
-	&antsAddParams('lat',$dtaR->{lat});
-	croak("$0: unknown longitude\n") unless defined($dtaR->{lon});
-	&antsAddParams('lon',$dtaR->{lon});
+	croak("$0: unknown latitude\n") unless defined($dtaR->{stn_lat});
+	&antsAddParams('LADCPproc::CTD_lat',$dtaR->{stn_lat});
+	croak("$0: unknown longitude\n") unless defined($dtaR->{stn_lon});
+	&antsAddParams('LADCPproc::CTD_lon',$dtaR->{stn_lon});
 
 	&antsAddParams('LADCPproc::CTD_sampfreq',1/$dtaR->{sampint});
-	&antsAddParams('ITS',$P{ITS} = 90);
+	&antsAddParams('LADCPproc::CTD_ITS',$P{ITS} = 90);
 }
 
 1;
