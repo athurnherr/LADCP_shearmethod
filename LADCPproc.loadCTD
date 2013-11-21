@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . L O A D C T D 
 #                    doc: Thu Dec  9 18:39:01 2010
-#                    dlm: Wed Sep 25 12:59:57 2013
+#                    dlm: Mon Nov 11 12:27:37 2013
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 210 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 27 57 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -24,6 +24,7 @@
 #   Jun 25, 2013: - adapted to :: %PARAM convention
 #	Sep 25, 2013: - renamed "std" %PARAMs %lat, %lon, %ITS to conform to new convention
 #				  - added support for carry-through of lat/lon info
+#	Nov 11, 2013: - BUG: lat/lon did not work any more?!?
 
 sub readCTD_ASCII($$)
 {
@@ -104,7 +105,7 @@ sub readCTD_CNV($$)
 		}
 		$latF = $1,next if ($hdr =~ /name (\d+) = latitude:/);
 		$lonF = $1,next if ($hdr =~ /name (\d+) = longitude:/);
-	
+
 		&antsAddParams('LADCPproc::CTD_start_time',$1),next				# selected metadata
 			if ($hdr =~ /start_time = (.*)/);
 	
@@ -164,8 +165,8 @@ sub readCTD_CNV($$)
 			push(@{$dtaR->{press}},($rec[$pressF] == $CTD_badval) ? nan : $rec[$pressF]);
 			push(@{$dtaR->{temp}}, ($rec[$tempF]  == $CTD_badval) ? nan : $rec[$tempF]);
 			push(@{$dtaR->{salin}},($rec[$salinF] == $CTD_badval) ? nan : $rec[$salinF]);
-			push(@{$dtaR->{press}},(!defined($latF) || ($rec[$latF] == $CTD_badval)) ? nan : $rec[$latF]);
-			push(@{$dtaR->{press}},(!defined($lonF) || ($rec[$lonF] == $CTD_badval)) ? nan : $rec[$lonF]);
+			push(@{$dtaR->{lat}},(!defined($latF) || ($rec[$latF] == $CTD_badval)) ? nan : $rec[$latF]);
+			push(@{$dtaR->{lon}},(!defined($lonF) || ($rec[$lonF] == $CTD_badval)) ? nan : $rec[$lonF]);
 		}
 	} elsif ($CTD_file_type eq 'binary') {
 	

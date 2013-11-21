@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . U H C O D E 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Wed Sep 25 12:29:46 2013
+#                    dlm: Tue Nov 12 03:44:44 2013
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 39 47 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 43 32 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from Eric's [merge.c]; with mods
@@ -37,6 +37,10 @@
 #	Feb 19, 2012: - added elapsed time to binned shear output
 #	Apr 11, 2012: - added MISSING_CTD_DATA_BIT
 #	Sep 25, 2013: - added code to calc gridded lat/lon info
+#	Nov 12, 2013: - BUG: correlation editing removed most (all?) 3-beam
+#				         solutions
+#				  - BUG: set_shear_flag() calculated shdev (slightly?)
+#						 wrongly
 
 #======================================================================
 # VELOCITY EDITING
@@ -180,14 +184,24 @@ sub set_misc_flags($$)
 			$edit_flags[$ens][$bin] |= $ERRVEL_BIT;
 		}
 
+		my($nBadCorr) = 0;
 		for (my($beam)=0; $beam<=3; $beam++) {
-			if ($LADCP{ENSEMBLE}[$ens]->{CORRELATION}[$bin][$beam] < $min_cor) {
+			$nBadCorr++
+				if ($LADCP{ENSEMBLE}[$ens]->{CORRELATION}[$bin][$beam] < $min_cor);
+        }
+		if (abs($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$E]) > 0) {	# 4-beam solution
+			if ($nBadCorr > 0) {
+				$flag_count{$CORREL_BIT}++;
+				$edit_flags[$ens][$bin] |= $CORREL_BIT;
+			}
+		} else {														# 3-beam solution
+			if ($nBadCorr > 1) {
 				$flag_count{$CORREL_BIT}++;
 				$edit_flags[$ens][$bin] |= $CORREL_BIT;
 			}
 		}
 
-		if ($bin < $shbin_start-1 || $bin >= $shbin_end) {
+		if ($bin < $shbin_start-1 || $bin >= $shbin_end) {				# manually remove vels outside shear bin range
 			$edit_flags[$ens][$bin] |= $BADVEL_BIT;
 			$flag_count{$BADVEL_BIT}++;
 		}
@@ -345,8 +359,8 @@ sub set_shear_flag($)
 		$vsh_dev[$i] = $vsh[$i] - $vsh_mu[$bsgi];
 
 		push(@ibad,$i) if ($ush_sig[$i] > 0 &&
-							(abs($ush_dev[$i]/$ush_sig[$bsgi]) > $max_shdev ||
-               				 abs($vsh_dev[$i]/$vsh_sig[$bsgi]) > $max_shdev));
+							(abs($ush_dev[$i]/$ush_sig[$i]) > $max_shdev ||
+               				 abs($vsh_dev[$i]/$vsh_sig[$i]) > $max_shdev));
 	} ## end of loop through shears
 
 	## Look for internal glitches: a positive shear followed
