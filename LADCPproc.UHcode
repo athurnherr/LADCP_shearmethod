@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . U H C O D E 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Tue Nov 12 03:44:44 2013
+#                    dlm: Thu Nov 21 10:13:04 2013
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 43 32 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 44 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from Eric's [merge.c]; with mods
