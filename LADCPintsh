@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Fri Jul 12 12:18:07 2013
+#                    dlm: Thu Mar 20 11:57:54 2014
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 57 59 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 58 55 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -55,6 +55,7 @@ $antsSummary = 'integrate LADCP shear';
 #	Jun 28, 2013: - adapated to new :: convention
 #				  - make sure LADCP DUL metadata are dealt with correctly
 #	Jul 12, 2013: - clarified -u usage with better messages
+#	Mar 20, 2014: - fiddled while debugging [LADCPproc]
 
 ($ANTS) = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
@@ -166,11 +167,12 @@ for (my($r)=0; &antsIn(); $r++) {
 	$uc_nsamp = $ants_[0][$uc_nshF];
 	if (defined($opt_u)) {
 		$dl_nsamp = $dc_nsamp + $uc_nsamp;
-		$ul_nsamp = $UL_[$dc_nshF] + $UL_[$uc_nshF];
 		$dc_nsamp += $UL_[$dc_nshF];
 		$uc_nsamp += $UL_[$uc_nshF];
+		$ul_nsamp = $dc_nsamp + $uc_nsamp;
 	}
-	$dc_nsamp[$r] = $dc_nsamp;
+	
+	$dc_nsamp[$r] = $dc_nsamp;								# save for each record
 	$uc_nsamp[$r] = $uc_nsamp;
 	$nsamp[$r] = $dc_nsamp + $uc_nsamp;
 	if (defined($opt_u)) {
@@ -261,6 +263,7 @@ for (my($r)=0; &antsIn(); $r++) {
 			$wz[$r] = $uc_wz[$r];
 			$elapsed[$r] = $uc_elapsed[$r];
         }
+		print(STDERR "uz[$r] := $uz[$r] [$dc_uz[$r]/$uc_uz[$r]] (dcf=$dcf ucf=$ucf)\n");
 	} else {
 		$uz[$r] = $vz[$r] = $wz[$r] = $elapsed[$r] = nan;
 	}
@@ -378,7 +381,7 @@ for (my($r)=my($u)=my($v)=my($w)=my($dc_u)=my($dc_v)=my($dc_w)=my($uc_u)=my($uc_
 
 my($refU,$refV,$refW,$dc_refU,$dc_refV,$dc_refW,$uc_refU,$uc_refV,$uc_refW);
 
-if (defined($opt_r)) {											# reference to bottom-track profile
+if (defined($opt_r)) {											# reference using velocity profile
 	print(STDERR "Loading reference-velocity data from $opt_r...\n")
 		if ($opt_d);
 	open(BTF,$opt_r) || croak("$opt_r: $!\n");
@@ -503,7 +506,7 @@ if (defined($opt_r)) {											# reference to bottom-track profile
 			$dc_refV = $dc_sumV/$dc_nSumVel - $dc_wSumBTv/$dc_sumVarBTv;
 			$dc_refW = $dc_sumW/$dc_nSumVel - $dc_wSumBTw/$dc_sumVarBTw if (@BT_w);
 		} else {
-			&antsInfo("$opt_r: insufficient reference-velocity data to constrain dc profile --- baroclinic profile only");
+			&antsInfo("$opt_r: insufficient reference-velocity data to constrain DC profile --- baroclinic profile only");
 		}
 	    
 		if ($uc_nSumVel > 0) {
@@ -511,7 +514,7 @@ if (defined($opt_r)) {											# reference to bottom-track profile
 			$uc_refV = $uc_sumV/$uc_nSumVel - $uc_wSumBTv/$uc_sumVarBTv;
 		    $uc_refW = $uc_sumW/$uc_nSumVel - $uc_wSumBTw/$uc_sumVarBTw if (@BT_w);
 		} else {
-			&antsInfo("$opt_r: insufficient reference-velocity data to constrain dc profile --- baroclinic profile only");
+			&antsInfo("$opt_r: insufficient reference-velocity data to constrain UC profile --- baroclinic profile only");
 		}
 	} else {
 		&antsInfo("$opt_r: no valid reference-velocity data --- baroclinic profiles only");

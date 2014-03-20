@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B E S T L A G 
 #                    doc: Tue Sep 28 21:58:48 2010
-#                    dlm: Tue Jun 25 14:40:05 2013
+#                    dlm: Wed Mar 19 21:33:30 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 193 31 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 28 45 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # TODO:
@@ -25,6 +25,7 @@
 #	May 18, 2012: - BUG: window start index was not always calculated correctly
 #	Oct 19, 2012: - BUG: opt_i had wrong sign!
 #	Jun 25, 2013: - adapted to :: %PARAM convention
+#	Mar 19, 2014: - moved %PARAM to LADCPproc
 
 sub interp_LADCP_w($$)
 {
@@ -190,7 +191,6 @@ sub lagLADCP2CTD()
 		printf(STDERR "\n\t\tmost popular lag = %ds\n",($first_guess_lag+$best_lag)*$CTD{sampint});
 	}
 
-	&antsAddParams('LADCPproc::LADCP_time_lag',($first_guess_lag + $best_lag) * $CTD{sampint});
 	return ($first_guess_lag + $best_lag) * $CTD{sampint};
 }
 

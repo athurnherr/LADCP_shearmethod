@@ -2,29 +2,33 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Wed Sep 25 13:09:21 2013
+#                    dlm: Wed Mar 19 23:41:55 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 84 61 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 91 55 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
 #   - the shear-method editing in this code is based on Eric Firing's merge.c
 #   - as described in [LADCPproc.backscatter], there are three different codes 
 #     for correcting echo amplitudes for attenuation loss & beam spreading
-#   - comments starting with ## are taken verbatim from the original implementations
+#   - comments starting with ## are taken verbatim from the original
+#	  implementations
 #   - the basic idea of the time lagging implemented in this code is similar
 #     to the one implemented in Martin Visbeck's bestlag.m
 #   - for SeaBird files:
 #       - CTD elapsed time is estimated from recno * CTD{sampint}
 #       - first elapsed time is added on output
-#   - output elapsed time is from CTD to allow yoyo processing without loss of
-#     time information
+#   - output time:
+#		- is from CTD to allow yoyo processing without loss of time information
+#		- to obtain LADCP time, add %LADCP_time_lag to CTD time
+#		- %LADCP_time_lag can be used for -l
+#		- -i is different: it should be set to the number that is added to
+#						   LADCP_elapsed to get the CTD time, i.e.
+#						   -%LADCP_time_lag
 #   - CTD{elapsed} is undefined for records before instrument is in the water
 #   - ITS-90 temp field in degC required
 #   - salin field prequired
 #   - pressure field in dbar required
-#   - -i should be set to the number that's added to LADCP_elapsed to make the two
-#     time series overplot nicely
 
 # HISTORY:
 #   Sep 16, 2010: - incepted
@@ -82,6 +86,9 @@
 #	Sep 25, 2013: - BUG: %PARAM magnetic_declination did not have LADCPproc:: prefix
 #				  - added CTD lat/lon info to most output files (but not BT)
 #				  - BUG: moved %water_depth to common %PARAMs
+#	Mar 19, 2014: - moved code to set LADCP_time_lag %PARAM into main prog so it is
+#				    set, even when -l is used
+#				  - added pitch, roll, hdg to -t output
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -405,6 +412,7 @@ print(STDERR "Matching CTD to LADCP time series...");
 print(STDERR "\n") if defined($opt_l);
 
 $opt_l = defined($opt_l) ? -$opt_l : &lagLADCP2CTD();
+&antsAddParams('LADCPproc::LADCP_time_lag',-$opt_l);
 
 print(STDERR "Associating CTD data with LADCP ensembles...");
 
@@ -757,7 +765,7 @@ if (defined($opt_a)) {
 if (defined($opt_t)) {
 	print(STDERR "Writing time series to <$opt_t>...");
 	
-	@antsNewLayout = ('ens','elapsed','depth','CTD_lat','CTD_lon','CTD_w','LADCP_w');
+	@antsNewLayout = ('ens','elapsed','depth','CTD_lat','CTD_lon','CTD_w','LADCP_w','pitch','roll','hdg');
 	&antsOut('EOF');
 	$antsCurParams = $commonParams;
 	close(STDOUT);
@@ -770,7 +778,11 @@ if (defined($opt_t)) {
 				 $LADCP{ENSEMBLE}[$ens]->{CTD_LAT},
 				 $LADCP{ENSEMBLE}[$ens]->{CTD_LON},
 				 $LADCP{ENSEMBLE}[$ens]->{CTD_W},
-				 $LADCP{ENSEMBLE}[$ens]->{W});
+				 $LADCP{ENSEMBLE}[$ens]->{W},
+				 $LADCP{ENSEMBLE}[$ens]->{PITCH},
+				 $LADCP{ENSEMBLE}[$ens]->{ROLL},
+				 $LADCP{ENSEMBLE}[$ens]->{HEADING},
+		);
 	}
 	print(STDERR "\n");
 }

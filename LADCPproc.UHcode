@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . U H C O D E 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Thu Nov 21 10:13:04 2013
+#                    dlm: Tue Mar  4 13:44:48 2014
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 44 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 44 66 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from Eric's [merge.c]; with mods
@@ -41,6 +41,7 @@
 #				         solutions
 #				  - BUG: set_shear_flag() calculated shdev (slightly?)
 #						 wrongly
+#	Mar  4, 2014: - added support for missing PITCH/ROLL (TILT) & HEADING
 
 #======================================================================
 # VELOCITY EDITING
@@ -98,7 +99,7 @@ sub set_wake_flag($$)
 
 	## if upward (=negative) velocity greater than minimum, calculate wake
 	## 		heading and inclination
-	if ($wref < -$min_wake_w) {
+	if (defined($LADCP{ENSEMBLE}[$ens]->{HEADING}) && $wref<-$min_wake_w) {
 		my($wake_hd) = 180 / 3.14159265358979 * atan2($uref,$vref);
 		my($speed) 	 = sqrt($uref*$uref + $vref*$vref);
 		my($wake_ang)= abs(180 / 3.14159265358979 * atan($speed/$wref));
@@ -212,6 +213,7 @@ sub set_misc_flags($$)
 sub set_PPI_flags($$)
 {
 	my($ens,$De) = @_;
+	my($clip_z0,$clip_z1);
 
 	my($dt_ping) = $LADCP{ENSEMBLE}[$ens]->{UNIX_TIME} - $LADCP{ENSEMBLE}[$ens-1]->{UNIX_TIME};
 
@@ -239,7 +241,7 @@ sub set_PPI_flags($$)
 		next if ($edit_flags[$ens][$bin]);
 
 		my($dob) = depthOfBin($ens,$bin);
-		if ($dob >= $clip_z0 && $dob <= $clip_z1) {
+		if (!defined($LADCP{ENSEMBLE}[$ens]->{TILT}) || ($dob>=$clip_z0 && $dob<=$clip_z1)) {
 			$edit_flags[$ens][$bin] |= $PPI_BIT;
 			$flag_count{$PPI_BIT}++;
 		}
@@ -264,7 +266,8 @@ sub edit_velocity($$)
 			}
 			next;
 		}
-		if ($LADCP{ENSEMBLE}[$ens]->{TILT} > $max_tilt) {				# get rid ensembles with large tilt
+		if (!defined($LADCP{ENSEMBLE}[$ens]->{TILT}) ||
+			 $LADCP{ENSEMBLE}[$ens]->{TILT}>$max_tilt) {				# get rid ensembles with large tilt
 			for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
 				$edit_flags[$ens][$bin] |= $TILT_BIT;
 				$flag_count{$TILT_BIT}++;
@@ -279,12 +282,14 @@ sub edit_velocity($$)
 			}
 			next;
 		}																# get rid ensembles after large rotation
-		if (abs($LADCP{ENSEMBLE}[$ens]->{TILT}-$LADCP{ENSEMBLE}[$ens-$De]->{TILT}) > $max_delta_tilt) {
-			for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
-				$edit_flags[$ens][$bin] |= $DELTA_TILT_BIT;
-				$flag_count{$DELTA_TILT_BIT}++;
-			}
-			next;
+		if (defined($LADCP{ENSEMBLE}[$ens]->{TILT}) &&
+			defined($LADCP{ENSEMBLE}[$ens-$De]->{TILT}) &&
+			abs($LADCP{ENSEMBLE}[$ens]->{TILT}-$LADCP{ENSEMBLE}[$ens-$De]->{TILT}) > $max_delta_tilt) {
+				for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
+					$edit_flags[$ens][$bin] |= $DELTA_TILT_BIT;
+					$flag_count{$DELTA_TILT_BIT}++;
+				}
+	            next;
 		}
 		for (my($bin)=$shbin_start-1; $bin<$shbin_end; $bin++) {		# flag bad velocities
 			$edit_flags[$ens][$bin] |= $BADVEL_BIT,$flag_count{$BADVEL_BIT}++
