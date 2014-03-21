@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Thu Sep 19 13:34:34 2013
+#                    dlm: Thu Mar 20 12:41:41 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 142 75 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 81 23 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [LADCPproc]
@@ -32,6 +32,7 @@
 #	Sep  6, 2013: - BUG: BT_begin_search_above value of 300m was correct; 
 #						 the original bug was in the documentation
 #	Sep 19, 2013: - added support for $BT_range_method
+#	Mar 20, 2014: - added support for $LADCP_max_gap
 
 #----------------------------------------------------------------------
 # Data editing
@@ -44,6 +45,7 @@
 # happen in particular with CTD platforms that tend to "weather vane".
 
 # $bad_beam = 1;
+
 
 #----------------------------------------------------------------------
 # ASCII CTD file support
@@ -67,6 +69,18 @@
 
 # $CTD_ASCII_header_lines	= 4;			# if this variable is defined, #-comments are disallowed
 # $CTD_ASCII_badval 		= 999;
+
+#----------------------------------------------------------------------
+# Time Lagging
+#----------------------------------------------------------------------
+
+# Calculation of the LADCP time series of depth is re-started
+# after a gap exceeding $LADCP_max_gap seconds. This is useful
+# for dealing with double dips, data from instruments that
+# return occasional velocities while on deck, etc. By default,
+# all gaps are ignored.
+
+$LADCP_max_gap = 9999;
 
 #----------------------------------------------------------------------
 # Backscatter Profile Parameters

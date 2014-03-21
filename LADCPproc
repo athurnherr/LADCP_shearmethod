@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Wed Mar 19 23:41:55 2014
+#                    dlm: Thu Mar 20 12:34:04 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 91 55 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 94 52 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -89,6 +89,9 @@
 #	Mar 19, 2014: - moved code to set LADCP_time_lag %PARAM into main prog so it is
 #				    set, even when -l is used
 #				  - added pitch, roll, hdg to -t output
+#	Mar 20, 2014: - BUG: wrong number of samples were recorded when upcast had no
+#						 valid data whatsoever
+#				  - added support for $LADCP_max_gap
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -357,7 +360,7 @@ print(STDERR "\t\tconstructing profile time series...")
 	if ($opt_d);
 	
 ($LADCP_start,$LADCP_end,$LADCP_bottom,$w_gap_time,$zErr,$maxz) =
-    mk_prof(\%LADCP,0,undef,1,6,70,0.1,9999);
+    mk_prof(\%LADCP,0,undef,1,6,70,0.1,$LADCP_max_gap);
 croak("\n$LADCP_file: no good ensembles found\n")
     unless defined($LADCP_start);
 
@@ -628,6 +631,8 @@ calc_shear($LADCP_start,$LADCP_bottom,$GRID_DZ,1);					# calculate final gridded
 @dc_lash_mu = @lash_mu; @dc_losh_mu = @losh_mu;
 
 print(STDERR "\n\tupcast...") if ($opt_d);
+@sh_n=@ush_mu=@ush_sig=@vsh_mu=@vsh_sig=@wsh_mu=@wsh_sig=@esh_mu=@lash_mu=@losh_mu=undef;
+
 edit_velocity($LADCP_end,$LADCP_bottom);							# upcast
 calc_shear($LADCP_end,$LADCP_bottom,$SHEAR_PREGRID_DZ,0);
 calc_shear($LADCP_end,$LADCP_bottom,$GRID_DZ,1);

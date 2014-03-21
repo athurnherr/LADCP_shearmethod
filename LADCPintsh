@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Thu Mar 20 11:57:54 2014
+#                    dlm: Thu Mar 20 12:14:53 2014
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 58 55 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 266 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -263,7 +263,6 @@ for (my($r)=0; &antsIn(); $r++) {
 			$wz[$r] = $uc_wz[$r];
 			$elapsed[$r] = $uc_elapsed[$r];
         }
-		print(STDERR "uz[$r] := $uz[$r] [$dc_uz[$r]/$uc_uz[$r]] (dcf=$dcf ucf=$ucf)\n");
 	} else {
 		$uz[$r] = $vz[$r] = $wz[$r] = $elapsed[$r] = nan;
 	}
