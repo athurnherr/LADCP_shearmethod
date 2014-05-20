@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B A C K S C A T T E R 
 #                    doc: Wed Oct 20 13:02:27 2010
-#                    dlm: Wed May 16 17:55:14 2012
+#                    dlm: Thu Mar 27 18:54:02 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 279 33 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 25 52 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -21,6 +21,8 @@
 #						 search
 #				  - BUG: same used bins entirely below seabed (only possible
 #						 for shallow casts)
+#	Mar 21, 2014: - adapted to new [LADCPproc.utils]
+#	Mar 27, 2014: - adapted to depthOfBinAlongBeam()
 
 my($BEAM1) = 0;
 my($BEAM2) = 1;
@@ -206,51 +208,40 @@ sub mk_backscatter_profs($$)
     }
 	print(STDERR "\n\t\@per-beam noise levels = @Er") if ($opt_d);
 
+	my($Svfunc);											# Sv method
+	if ($opt_u =~ /^[dD]/) {
+		$Svfunc = \&Sv_D99;
+	} elsif ($opt_u =~ /^[vV]/) {
+		$Svfunc = \&Sv_V04;
+	} elsif ($opt_u =~ /^[tT]/) {
+		$Svfunc = \&Sv_T11;
+	} else {
+		$Svfunc = \&Sv_nocorr;
+	}
+
 	for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
 		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
-			my($gi) = int(&depthOfBin($ens,$bin) / $GRID_DZ);
-			next if ($gi < 0);
-			my($range_to_bin) = &dzToBin($ens,$bin) / cos(rad($LADCP{BEAM_ANGLE}));
+			my($range_to_bin) = &rangeToBin($ens,$bin);
 
-			my($Svfunc);
-			if ($opt_u =~ /^[dD]/) {
-				$Svfunc = \&Sv_D99;
-			} elsif ($opt_u =~ /^[vV]/) {
-				$Svfunc = \&Sv_V04;
-			} elsif ($opt_u =~ /^[tT]/) {
-				$Svfunc = \&Sv_T11;
-			} else {
-				$Svfunc = \&Sv_nocorr;
-			}
+			for (my($beam)=0; $beam<4; $beam++) {
+				my($gi) = int(&depthOfBinAlongBeam($ens,$bin,$beam) / $GRID_DZ);
+				next if ($gi < 0);
+				$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$beam] = &$Svfunc($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
+							 							    		 $LADCP{TRANSMITTED_PULSE_LENGTH},
+														    		 $Er[$beam],$range_to_bin,
+							            			        		 $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$beam]);
 
-			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM1] = &$Svfunc($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
-														    $Er[$BEAM1],$range_to_bin,
-							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM1]);
-			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM2] = &$Svfunc($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
-														    $Er[$BEAM2],$range_to_bin,
-							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM2]);
-			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM3] = &$Svfunc($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
-														    $Er[$BEAM3],$range_to_bin,
-							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM3]);
-			$LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$BEAM4] = &$Svfunc($LADCP{ENSEMBLE}[$ens]->{CTD_TEMP},
-							 							    $LADCP{TRANSMITTED_PULSE_LENGTH},
-														    $Er[$BEAM4],$range_to_bin,
-							            			        $LADCP{ENSEMBLE}[$ens]->{ECHO_AMPLITUDE}[$bin][$BEAM4]);
-			my($Sv) = avg(@{$LADCP{ENSEMBLE}[$ens]->{SV}[$bin]});
+				$sSv[$gi][$bin] += $LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$beam];
+				$nSv[$gi][$bin]++;							            			        		 
 
-			$sSv[$gi][$bin] += $Sv;
-			$nSv[$gi][$bin]++;
-
-			if ($bin>=$Svbin_start && $bin<=$Svbin_end) {
-				$sSv_prof[$gi] += $Sv;
-				$nSv_prof[$gi]++;
-			}
-		}
-	}
-}
+				if ($bin>=$Svbin_start && $bin<=$Svbin_end) {
+					$sSv_prof[$gi] += $LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$beam];
+					$nSv_prof[$gi]++;
+				} # if $bin
+			} # for $beam
+		} # for $bin
+	} # for $end
+} # sub
 
 sub depthOfGI($) { return $_[0]*$GRID_DZ + $GRID_DZ/2; }		# depth corresponding to particular grid index
 

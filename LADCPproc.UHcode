@@ -1,12 +1,12 @@
 #======================================================================
 #                    L A D C P P R O C . U H C O D E 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Tue May 20 09:05:56 2014
+#                    dlm: Tue May 20 10:47:15 2014
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 218 15 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 404 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
-# PERLified functions from Eric's [merge.c]; with mods
+# PERLified functions from E. Firing's [merge.c], modified by A.M. Thurnherr
 
 # NOTES:
 #	- velocity integration removed
@@ -16,12 +16,12 @@
 #		CTD_SVEL
 #	- negative depths are not allowed (should not happen given DEPTH)
 
-# WEIRDNESSES:
+# WEIRDNESSES IN ERIC'S CODE:
 #	- w reference layer in set_misc_flags is calculated without taking
 #	  the ref layer bins into account
 #	- u,v ref lr vels in set_wake_flag use w ref layer bins
-#	- distance to bin 1 center is not sound-speed corrected [CORRECTED]
-#	- $tilt calculation is wrong
+#	- distance to bin 1 center is not sound-speed corrected [WEIRDNESS CORRECTED]
+#	- $tilt calculation is wrong. I do not understand this comment in 2014.
 
 # HISTORY:
 #	Sep 17, 2010: - created
@@ -42,6 +42,7 @@
 #				  - BUG: set_shear_flag() calculated shdev (slightly?)
 #						 wrongly
 #	Mar  4, 2014: - added support for missing PITCH/ROLL (TILT) & HEADING
+#	Mar 21, 2014: - moved depthOfBin() to [LADCPproc.utils]
 
 #======================================================================
 # VELOCITY EDITING
@@ -61,22 +62,6 @@ my($DELTA_TILT_BIT)	= 0x400;
 my($MISSING_CTD_DATA_BIT) = 0x800;
 
 my(%flag_count);
-
-# apparently, in Eric's code, DISTANCE_TO_BIN1_CENTER is not sound-speed corrected
-sub dzToBin($$)
-{
-	my($ens,$bin) = @_;
-	my($sscorr) = $LADCP{ENSEMBLE}[$ens]->{CTD_SVEL} / $LADCP{ENSEMBLE}[$ens]->{SPEED_OF_SOUND};
-	return $sscorr * ($LADCP{DISTANCE_TO_BIN1_CENTER} + $bin*$LADCP{BIN_LENGTH});
-}
-
-sub depthOfBin($$)
-{
-	my($ens,$bin) = @_;
-	return $LADCP{ENSEMBLE}[$ens]->{XDUCER_FACING_UP} ?
-		   $LADCP{ENSEMBLE}[$ens]->{DEPTH} - &dzToBin($ens,$bin) :
-		   $LADCP{ENSEMBLE}[$ens]->{DEPTH} + &dzToBin($ens,$bin);
-}
 
 sub set_wake_flag($$)
 {

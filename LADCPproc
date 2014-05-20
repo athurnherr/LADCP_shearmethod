@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Tue May 20 09:01:32 2014
+#                    dlm: Tue May 20 10:46:41 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 96 0 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 569 0 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -93,6 +93,11 @@
 #	Mar 20, 2014: - BUG: wrong number of samples were recorded when upcast had no
 #						 valid data whatsoever
 #				  - added support for $LADCP_max_gap
+#	Mar 21, 2014: - added [LADCPproc.utils]
+#				  - added $ignore_tilt
+#	Mar 24, 2014: - added $pitch_offset, $roll_offset
+#	Mar 27, 2014: - BUG: Sv output did not reflect true bin depths
+#	Apr 25, 2014: - added LADCP_errvel to -t output
 #	May 20, 2014: - merged laptop with whoosher versions (folded in Feb 22 change) 
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
@@ -103,6 +108,7 @@ require "$ANTS/ants.pl";
 require "$ANTS/libEOS83.pl";
 require "$ANTS/libstats.pl";
 require "$LADCPPROC/LADCPproc.version";
+require "$LADCPPROC/LADCPproc.utils";
 require "$LADCPPROC/LADCPproc.loadCTD";
 require "$LADCPPROC/LADCPproc.bestLag";
 require "$LADCPPROC/LADCPproc.BT";
@@ -309,7 +315,9 @@ if ($LADCP{BEAM_COORDINATES}) {
 			if ($bad_beam);
 	}
 	for (my($ens)=0; $ens<=$#{$LADCP{ENSEMBLE}}; $ens++) {
-		$LADCP{ENSEMBLE}[$ens]->{TILT} = &angle_from_vertical($LADCP{ENSEMBLE}[$ens]->{PITCH},$LADCP{ENSEMBLE}[$ens]->{ROLL});
+		$LADCP{ENSEMBLE}[$ens]->{TILT} = $ignore_tilt ? 0
+                                       : &angle_from_vertical($LADCP{ENSEMBLE}[$ens]->{PITCH}+$pitch_offset,
+															  $LADCP{ENSEMBLE}[$ens]->{ROLL}+$roll_offset);
 		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
 			if ($bad_beam) {
 				undef($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$bad_beam-1]);
@@ -341,7 +349,9 @@ if ($LADCP{BEAM_COORDINATES}) {
 		}
 	}
 	for (my($ens)=0; $ens<=$#{$LADCP{ENSEMBLE}}; $ens++) {
-		$LADCP{ENSEMBLE}[$ens]->{TILT} = &angle_from_vertical($LADCP{ENSEMBLE}[$ens]->{PITCH},$LADCP{ENSEMBLE}[$ens]->{ROLL});
+		$LADCP{ENSEMBLE}[$ens]->{TILT} = $ignore_tilt ? 0
+									   : &angle_from_vertical($LADCP{ENSEMBLE}[$ens]->{PITCH}+$pitch_offset,
+															  $LADCP{ENSEMBLE}[$ens]->{ROLL}+$roll_offset);
 		my($hdg) = rad($LADCP{ENSEMBLE}[$ens]->{HEADING});
 		$LADCP{HEADING_BIAS} = ($CC_offset + $CC_cos_fac*cos($hdg) + $CC_sin_fac*sin($hdg)) - $magdec
 			if ($opt_c);
@@ -735,8 +745,7 @@ if (defined($opt_a)) {
 	print(STDERR "Writing acoustic backscatter depth-time-series to <$opt_a>...");
 
 	
-	@antsNewLayout = ('ens','elapsed','CTD_depth','CTD_lat','CTD_lon','depth','bin','downcast',
-					  'Sv_beam1','Sv_beam2','Sv_beam3','Sv_beam4','Sv.median');
+	@antsNewLayout = ('ens','elapsed','CTD_depth','CTD_lat','CTD_lon','depth','bin','beam','downcast','Sv');
 	&antsOut('EOF');
     close(STDOUT);
 	open(STDOUT,">$opt_a") || croak("$opt_a: $!\n");
@@ -752,15 +761,16 @@ if (defined($opt_a)) {
 
 	for (my($ens)=$LADCP_start; $ens<=$LADCP_end; $ens++) {
 		for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
-			&antsOut($LADCP{ENSEMBLE}[$ens]->{NUMBER},
-					 $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
-					 $LADCP{ENSEMBLE}[$ens]->{DEPTH},
-					 $LADCP{ENSEMBLE}[$ens]->{CTD_LAT},$LADCP{ENSEMBLE}[$ens]->{CTD_LON},
-					 &depthOfBin($ens,$bin),$bin+1,
-					 ($ens <= $LADCP_bottom) ? 1 : 0,
-					 @{$LADCP{ENSEMBLE}[$ens]->{SV}[$bin]},
-					 median(@{$LADCP{ENSEMBLE}[$ens]->{SV}[$bin]})
-			);
+			for (my($beam)=0; $beam<4; $beam++) {
+				&antsOut($LADCP{ENSEMBLE}[$ens]->{NUMBER},
+						 $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+						 $LADCP{ENSEMBLE}[$ens]->{DEPTH},
+						 $LADCP{ENSEMBLE}[$ens]->{CTD_LAT},$LADCP{ENSEMBLE}[$ens]->{CTD_LON},
+						 &depthOfBinAlongBeam($ens,$bin,$beam),$bin+1,$beam+1,
+						 ($ens <= $LADCP_bottom) ? 1 : 0,
+						 $LADCP{ENSEMBLE}[$ens]->{SV}[$bin][$beam],
+	            );
+	        }
 		}	 
 	}
 
@@ -772,7 +782,7 @@ if (defined($opt_a)) {
 if (defined($opt_t)) {
 	print(STDERR "Writing time series to <$opt_t>...");
 	
-	@antsNewLayout = ('ens','elapsed','depth','CTD_lat','CTD_lon','CTD_w','LADCP_w','pitch','roll','hdg');
+	@antsNewLayout = ('ens','elapsed','depth','CTD_lat','CTD_lon','CTD_w','LADCP_w','LADCP_errvel','pitch','roll','hdg');
 	&antsOut('EOF');
 	$antsCurParams = $commonParams;
 	close(STDOUT);
@@ -786,6 +796,7 @@ if (defined($opt_t)) {
 				 $LADCP{ENSEMBLE}[$ens]->{CTD_LON},
 				 $LADCP{ENSEMBLE}[$ens]->{CTD_W},
 				 $LADCP{ENSEMBLE}[$ens]->{W},
+				 $LADCP{ENSEMBLE}[$ens]->{ERR_VEL},
 				 $LADCP{ENSEMBLE}[$ens]->{PITCH},
 				 $LADCP{ENSEMBLE}[$ens]->{ROLL},
 				 $LADCP{ENSEMBLE}[$ens]->{HEADING},

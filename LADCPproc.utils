@@ -1,0 +1,72 @@
+#======================================================================
+#                    L A D C P P R O C . U T I L S 
+#                    doc: Fri Mar 21 15:16:59 2014
+#                    dlm: Thu Mar 27 19:36:29 2014
+#                    (c) 2014 A.M. Thurnherr
+#                    uE-Info: 57 38 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#	Mar 21, 2014: - created
+#				  - added rangeToBin()
+#	Mar 27, 2014: - added rangeToBinAlongBeam()
+
+sub rangeToBin($$)
+{
+	my($ens,$bin) = @_;
+	my($sscorr) = $LADCP{ENSEMBLE}[$ens]->{CTD_SVEL} / $LADCP{ENSEMBLE}[$ens]->{SPEED_OF_SOUND};
+	return $sscorr * ($LADCP{DISTANCE_TO_BIN1_CENTER} + $bin*$LADCP{BIN_LENGTH}) / cos(rad($LADCP{BEAM_ANGLE}));
+}
+
+#----------------------------------------------------------------------
+# - in the UH code
+#	- the distance to the first bin is not soundspeed-corrected
+#	- instrument tilt is not considered
+#----------------------------------------------------------------------
+
+sub depthOfBin($$)
+{
+	sub dzToBin($$)
+	{
+		my($ens,$bin) = @_;
+		my($sscorr) = $LADCP{ENSEMBLE}[$ens]->{CTD_SVEL} / $LADCP{ENSEMBLE}[$ens]->{SPEED_OF_SOUND};
+		my($tlcorr) = cos(rad($LADCP{ENSEMBLE}[$ens]->{TILT}));
+		return $sscorr*$tlcorr * ($LADCP{DISTANCE_TO_BIN1_CENTER} + $bin*$LADCP{BIN_LENGTH});
+	}
+
+	my($ens,$bin) = @_;
+	return $LADCP{ENSEMBLE}[$ens]->{XDUCER_FACING_UP} ?
+		   $LADCP{ENSEMBLE}[$ens]->{DEPTH} - &dzToBin($ens,$bin) :
+		   $LADCP{ENSEMBLE}[$ens]->{DEPTH} + &dzToBin($ens,$bin);
+}
+
+
+sub depthOfBinAlongBeam($$$)
+{
+	sub dzToBinAlongBeam($$$)
+	{
+		my($ens,$bin,$beam) = @_;
+		my($sscorr) = $LADCP{ENSEMBLE}[$ens]->{CTD_SVEL} / $LADCP{ENSEMBLE}[$ens]->{SPEED_OF_SOUND};
+
+		my($pitch) = $LADCP{ENSEMBLE}[$ens]->{PITCH} + $pitch_offset;
+		my($roll)  = $LADCP{ENSEMBLE}[$ens]->{ROLL}  + $roll_offset;
+
+		if ($beam == 0) 	{ $roll  += $LADCP{BEAM_ANGLE}; }
+		elsif ($beam == 1) 	{ $roll  -= $LADCP{BEAM_ANGLE}; }
+		elsif ($beam == 2) 	{ $pitch += $LADCP{BEAM_ANGLE}; }
+		else 				{ $pitch -= $LADCP{BEAM_ANGLE}; }
+
+		my($tlcorr) = cos(rad(&angle_from_vertical($pitch,$roll)));
+		
+		return $sscorr*$tlcorr * ($LADCP{DISTANCE_TO_BIN1_CENTER} + $bin*$LADCP{BIN_LENGTH});
+	}
+
+	my($ens,$bin,$beam) = @_;
+	return $LADCP{ENSEMBLE}[$ens]->{XDUCER_FACING_UP} ?
+		   $LADCP{ENSEMBLE}[$ens]->{DEPTH} - &dzToBinAlongBeam($ens,$bin,$beam) :
+		   $LADCP{ENSEMBLE}[$ens]->{DEPTH} + &dzToBinAlongBeam($ens,$bin,$beam);
+}
+
+
+
+1;

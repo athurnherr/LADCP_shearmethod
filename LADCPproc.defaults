@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Tue May 20 09:07:05 2014
+#                    dlm: Tue May 20 10:49:52 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 278 0 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 289 0 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [LADCPproc]
@@ -33,6 +33,7 @@
 #						 the original bug was in the documentation
 #	Sep 19, 2013: - added support for $BT_range_method
 #	Feb 22, 2014: - added $LADCP_max_gap
+#	Mar 21, 2014: - added $ignore_tilt
 
 #----------------------------------------------------------------------
 # Data editing
@@ -47,13 +48,31 @@
 # $bad_beam = 1;
 
 
-# Some ADCPs report occasional spurious velocity data while on deck.
-# The software can detect and remove many of these bad data based on
-# long gaps between subsequent valid ensembles. To turn on this heuristic,
-# reduce the value of the following varible (time in seconds) to the longest
-# LADCP gap in the data set (bottom bottle stop, large instrument tilt, etc). 
+# Calculation of the LADCP time series of depth is re-started
+# after a gap exceeding $LADCP_max_gap seconds. This is useful
+# for dealing with double dips, data from instruments that
+# return occasional velocities while on deck, etc. By default,
+# all gaps are ignored. To turn on this heuristic,
+# reduce the value of the following varible (time in seconds) to the 
+# longest real gap (large tilt, bottom stop, etc.) in the data. 
 
 $LADCP_max_gap = 9999;
+
+
+# For DVL data collected on 2014 Webb gliders, the pitch information 
+# is offset by 11 degrees. Setting $ignore_tilt = 1 causes
+# tilt information not be used:
+#	- to set TILT_BIT DELTA_TILT_BIT PPI_BIT
+#	- to calculate the depth of a particular bin
+
+undef($ignore_tilt);
+
+
+# The values in the following variables are added to the corresponding
+# tilt measurements.
+
+$pitch_offset = 0;
+$roll_offset = 0;
 
 #----------------------------------------------------------------------
 # ASCII CTD file support
@@ -81,14 +100,6 @@ $LADCP_max_gap = 9999;
 #----------------------------------------------------------------------
 # Time Lagging
 #----------------------------------------------------------------------
-
-# Calculation of the LADCP time series of depth is re-started
-# after a gap exceeding $LADCP_max_gap seconds. This is useful
-# for dealing with double dips, data from instruments that
-# return occasional velocities while on deck, etc. By default,
-# all gaps are ignored.
-
-$LADCP_max_gap = 9999;
 
 #----------------------------------------------------------------------
 # Backscatter Profile Parameters
