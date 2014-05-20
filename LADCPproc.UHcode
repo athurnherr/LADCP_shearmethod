@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . U H C O D E 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Tue Mar  4 13:44:48 2014
+#                    dlm: Tue May 20 09:05:56 2014
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 44 66 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 218 15 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from Eric's [merge.c]; with mods
@@ -210,6 +210,13 @@ sub set_misc_flags($$)
 }
 
 ## The following is for editing out the second bottom bounce.
+#	- in the UH code, tilt = max(pitch,roll)
+#	- using the real tilt (here) implies that PPI editing is too conservative
+#	  in case of large tilts
+#	- since, however, the sound speed at the transducer is used instead
+#	  of the mean soundspeed below the ADCP, the difference is unlikely
+#	  to matter
+
 sub set_PPI_flags($$)
 {
 	my($ens,$De) = @_;

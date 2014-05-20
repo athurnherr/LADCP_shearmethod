@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Thu Mar 20 12:34:04 2014
+#                    dlm: Tue May 20 09:01:32 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 94 52 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 96 0 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -86,12 +86,14 @@
 #	Sep 25, 2013: - BUG: %PARAM magnetic_declination did not have LADCPproc:: prefix
 #				  - added CTD lat/lon info to most output files (but not BT)
 #				  - BUG: moved %water_depth to common %PARAMs
+#	Feb 22, 2014: - modified diagnostics output
 #	Mar 19, 2014: - moved code to set LADCP_time_lag %PARAM into main prog so it is
 #				    set, even when -l is used
 #				  - added pitch, roll, hdg to -t output
 #	Mar 20, 2014: - BUG: wrong number of samples were recorded when upcast had no
 #						 valid data whatsoever
 #				  - added support for $LADCP_max_gap
+#	May 20, 2014: - merged laptop with whoosher versions (folded in Feb 22 change) 
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -216,7 +218,7 @@ $GRID_DZ = $opt_o;
 
 print(STDERR "Reading CTD data ($CTD_file)...");
 readCTD($CTD_file,\%CTD);
-printf(STDERR "\n\t%d scans",scalar(@{$CTD{press}})) if ($opt_d);
+printf(STDERR "\n\t%d scans (%.1fs sample interval)",scalar(@{$CTD{press}}),$CTD{sampint}) if ($opt_d);
 print(STDERR "\n");
 
 my($year)  = substr($LADCP{ENSEMBLE}[0]->{DATE},6,4);
@@ -360,7 +362,7 @@ print(STDERR "\t\tconstructing profile time series...")
 	if ($opt_d);
 	
 ($LADCP_start,$LADCP_end,$LADCP_bottom,$w_gap_time,$zErr,$maxz) =
-    mk_prof(\%LADCP,0,undef,1,6,70,0.1,$LADCP_max_gap);
+	mk_prof(\%LADCP,0,undef,1,6,70,0.1,$LADCP_max_gap);
 croak("\n$LADCP_file: no good ensembles found\n")
     unless defined($LADCP_start);
 
