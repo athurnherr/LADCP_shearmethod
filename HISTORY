@@ -1,9 +1,9 @@
 ======================================================================
                     H I S T O R Y 
                     doc: Tue May 15 18:04:39 2012
-                    dlm: Tue Aug  6 20:59:38 2013
+                    dlm: Sun Jul 27 16:21:46 2014
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 61 37 NIL 0 0 72 3 2 8 NIL ofnI
+                    uE-Info: 61 7 NIL 0 0 72 3 2 8 NIL ofnI
 ======================================================================
 
 May 15, 2012:
@@ -58,5 +58,5 @@ Jul 12, 2013:
 
 Aug  6, 2013:
   - V1.2 [.hg/hgrc] [LADCPproc.version]
-  - but fixed in [LADCPproc.defaults]
+  - bug fixed in [LADCPproc.defaults]
 

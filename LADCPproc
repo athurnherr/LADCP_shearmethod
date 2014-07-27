@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Tue May 20 10:46:41 2014
+#                    dlm: Sun Jul 27 16:23:50 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 569 0 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 103 69 NIL 0 0 72 11 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -98,7 +98,9 @@
 #	Mar 24, 2014: - added $pitch_offset, $roll_offset
 #	Mar 27, 2014: - BUG: Sv output did not reflect true bin depths
 #	Apr 25, 2014: - added LADCP_errvel to -t output
-#	May 20, 2014: - merged laptop with whoosher versions (folded in Feb 22 change) 
+#	May 20, 2014: - merged laptop with whoosher versions (folded in Feb 22 change)
+#	Jul 27, 2014: - renamed LADCPproc.UHcode to LADCPproc.shearmethod, because the code has
+#					diverged more and more from the UH implementation
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -113,7 +115,7 @@ require "$LADCPPROC/LADCPproc.loadCTD";
 require "$LADCPPROC/LADCPproc.bestLag";
 require "$LADCPPROC/LADCPproc.BT";
 require "$LADCPPROC/LADCPproc.backscatter";
-require "$LADCPPROC/LADCPproc.UHcode";
+require "$LADCPPROC/LADCPproc.shearmethod";
 require "$PERL_TOOLS/RDI_BB_Read.pl";
 require "$PERL_TOOLS/RDI_Coords.pl";
 require "$PERL_TOOLS/RDI_Utils.pl";

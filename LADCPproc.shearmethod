@@ -1,9 +1,9 @@
 #======================================================================
-#                    L A D C P P R O C . U H C O D E 
+#                    L A D C P P R O C . S H E A R M E T H O D 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Tue May 20 10:47:15 2014
+#                    dlm: Sun Jul 27 16:25:56 2014
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 404 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 314 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from E. Firing's [merge.c], modified by A.M. Thurnherr
@@ -43,6 +43,17 @@
 #						 wrongly
 #	Mar  4, 2014: - added support for missing PITCH/ROLL (TILT) & HEADING
 #	Mar 21, 2014: - moved depthOfBin() to [LADCPproc.utils]
+#	Jul 15, 2014: - BUG: occasional missing w values were used in w_ref calc;
+#					(potentially useless) tests for missing w were added wherever
+#					edit_flags is tested or w is used; this change greatly
+#					increase the number of shear samples available in case of
+#					DoMORE1 tow-yo#1 data
+#				  - disabled two assertions about depths of shear bins, one of
+#				    which was violated by DoMORE1 uplooker data (apparently
+#					valid data above the sea surface in the uplooker)
+#	Jul 27, 2014: - renamed from [LADCPproc.UHmethod] because the code has
+#					diverged quite a bit from the original mplementation. However,
+#					the shear editing core remains as in the UH code
 
 #======================================================================
 # VELOCITY EDITING
@@ -71,7 +82,7 @@ sub set_wake_flag($$)
 	my($uref) = my($vref) = my($wref) = 0;
 
 	for (my($bin)=$wbin_start-1; $bin<$wbin_end; $bin++) {		# calc crude ref lr vel from all data
-		next if ($edit_flags[$ens][$bin]);
+		next if ($edit_flags[$ens][$bin] || $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]==0);
 		$uref += $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$U];
 		$vref += $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$V];
 		$wref += $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W];
@@ -127,15 +138,14 @@ sub set_misc_flags($$)
 	my($SLIfac) = 1 - cos(rad($LADCP{BEAM_ANGLE}));
 
 	for (my($bin)=0; $bin<$w_ref_bin; $bin++) {				# ref-lr w
-   		if (!$edit_flags[$ens][$bin]) {
-   			$ww += $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W];
-			$n++;
-		}
+		next if ($edit_flags[$ens][$bin] || $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]==0);
+		$ww += $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W];
+		$n++;
 	}
 	$ww /= $n if ($n > 0);
 
 	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
-		next if ($edit_flags[$ens][$bin]);
+		next if ($edit_flags[$ens][$bin] || $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]==0);
          
 		## We use the standard criterion for bottom interference; e.g. for
 		## 30-degree beams, the last 15% of the profile is contaminated
@@ -230,7 +240,7 @@ sub set_PPI_flags($$)
 	}
 
 	for (my($bin)=$first_clip_bin-1; $bin<$LADCP{N_BINS}; $bin++) {
-		next if ($edit_flags[$ens][$bin]);
+		next if ($edit_flags[$ens][$bin] || $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]==0);
 
 		my($dob) = depthOfBin($ens,$bin);
 		if (!defined($LADCP{ENSEMBLE}[$ens]->{TILT}) || ($dob>=$clip_z0 && $dob<=$clip_z1)) {
@@ -251,6 +261,7 @@ sub edit_velocity($$)
 	$flag_count{$TILT_BIT} = $flag_count{$DELTA_TILT_BIT} = $flag_count{$MISSING_CTD_DATA_BIT} = 0;
 
 	for (my($ens)=$start; $ens!=$end+$De; $ens+=$De) {					# loop over all ens from start to end
+		next unless ($LADCP{ENSEMBLE}[$ens]->{W});
 		if (abs($LADCP{ENSEMBLE}[$ens]->{CTD_W}-$LADCP{ENSEMBLE}[$ens]->{W}) > $w_max_err) {	# get rid of aliased vels (ambiguity)
 			for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) {
 				$edit_flags[$ens][$bin] |= $W_CTD_BIT;
@@ -294,13 +305,13 @@ sub edit_velocity($$)
     }
 }
 
-#======================================================================
+#==============================================================================
 # CALCULATE VELOCITY SHEAR
 #	- final output in @ush_mu,@vsh_mu,@wsh_mu,@ush_sig,@vsh_sig,@wsh_sig
 #		NEW (ant): elapsed time output in @esh_mu
 #				   lat/lon output in @lash_mu, @losh_mu
-# 	- @sh_i0, @sh_i1, @dsh, @ush, @vsh, @wsh are defined "local" in calc_shear
-#======================================================================
+# 	- @sh_i0, @sh_i1, @dsh, @ush, @vsh, @wsh are defined "local" in &calc_shear
+#==============================================================================
 
 #----------------------------------------------------------------------
 # uv_to_shear(ens)
@@ -314,7 +325,7 @@ sub uv_to_shear($)
 
 	@sh_i0 = @sh_i1 = ();
 	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) { 
-		next if ($edit_flags[$ens][$bin]);
+		next if ($edit_flags[$ens][$bin] || $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]==0);
 		$nvel++;
 		push(@sh_i1,$bin) if (@sh_i0);
 		push(@sh_i0,$bin) if ($bin < $LADCP{N_BINS}-1);
@@ -324,11 +335,12 @@ sub uv_to_shear($)
 	for (my($i)=0; $i<@sh_i1; $i++) {								# calc and bin shears
 		my($d0) = &depthOfBin($ens,$sh_i0[$i]);
 		my($d1) = &depthOfBin($ens,$sh_i1[$i]);
-		die("$0: assertion failed (ens=$ens i=$i depth=$LADCP{ENSEMBLE}[$ens]->{DEPTH} sh_i0[$i]=$sh_i0[$i] sh_i1[$i]=$sh_i1[$i] d0=$d0 d1=$d1)")
-			unless ($d0>=0 && $d1>=0);
-		die("$0: assertion failed (ens=$ens i=$i sh_i0[$i]=$sh_i0[$i] sh_i1[$i]=$sh_i1[$i] d0=$d0 d1=$d1)")
-			unless (($LADCP{ENSEMBLE}[$ens]->{XDUCER_FACING_DOWN} && $d1-$d0>0) ||
-					($LADCP{ENSEMBLE}[$ens]->{XDUCER_FACING_UP}   && $d1-$d0<0));
+		next unless ($d0>=0 && $d1>=0);
+#		die("$0: assertion failed (ens=$ens i=$i depth=$LADCP{ENSEMBLE}[$ens]->{DEPTH} sh_i0[$i]=$sh_i0[$i] sh_i1[$i]=$sh_i1[$i] d0=$d0 d1=$d1)")
+#			unless ($d0>=0 && $d1>=0);
+#		die("$0: assertion failed (ens=$ens i=$i sh_i0[$i]=$sh_i0[$i] sh_i1[$i]=$sh_i1[$i] d0=$d0 d1=$d1)")
+#			unless (($LADCP{ENSEMBLE}[$ens]->{XDUCER_FACING_DOWN} && $d1-$d0>0) ||
+#					($LADCP{ENSEMBLE}[$ens]->{XDUCER_FACING_UP}   && $d1-$d0<0));
 		$dsh[$i] = ($d1 + $d0) / 2;
 		$ush[$i] = ($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$sh_i1[$i]][$U] -
 					$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$sh_i0[$i]][$U]) / ($d1-$d0);

@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Thu Mar 20 12:14:53 2014
+#                    dlm: Tue Jul 15 09:14:27 2014
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 266 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 526 0 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
