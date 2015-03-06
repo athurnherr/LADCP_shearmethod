@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B A C K S C A T T E R 
 #                    doc: Wed Oct 20 13:02:27 2010
-#                    dlm: Tue Aug  5 13:32:13 2014
+#                    dlm: Fri Mar  6 15:52:50 2015
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 30 71 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 32 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -23,6 +23,7 @@
 #						 for shallow casts)
 #	Mar 21, 2014: - adapted to new [LADCPproc.utils]
 #	Mar 27, 2014: - adapted to depthOfBinAlongBeam()
+#	May 25, 2014: - made search_below integer
 #	Jul 27, 2014: - moved depthOfGI() to [LADCPproc.utils]
 #	Aug  5, 2014: - BUG: find_backscatter_seabed() discarded everything if
 #						 LADCP bin 1 had the backscatter max at the edge of
@@ -253,7 +254,7 @@ sub find_backscatter_seabed($)
 	my($water_depth) = @_;
 	my(@wdepth_gi);												# water_depth indices
 
-	my($search_below) = max(0,$water_depth-$BT_begin_search_above);
+	my($search_below) = int(max(0,$water_depth-$BT_begin_search_above));
 	my($mdgi) = int($search_below/$GRID_DZ);					# grid index to begin search
 	printf(STDERR "\n\t\tlooking for seabed below %d m (gi = [%d..%d])",$search_below,$mdgi,scalar(@nSv))
 		if ($opt_d);

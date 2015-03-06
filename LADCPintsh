@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Tue Jul 15 09:14:27 2014
+#                    dlm: Fri Mar  6 15:51:49 2015
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 526 0 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 8 0 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -56,6 +56,7 @@ $antsSummary = 'integrate LADCP shear';
 #				  - make sure LADCP DUL metadata are dealt with correctly
 #	Jul 12, 2013: - clarified -u usage with better messages
 #	Mar 20, 2014: - fiddled while debugging [LADCPproc]
+#	Jun  7, 2014: - improved error messages
 
 ($ANTS) = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
@@ -420,7 +421,7 @@ if (defined($opt_r)) {											# reference using velocity profile
 	        &fixLowSampStat(\@BT_w_var,@BT_nsamp);
         } elsif (defined($BTdF) && defined($BTuF) &&			# LDEO_IX ANTS format
 				 defined($BTvF) && defined($BTerrF)) {
-			croak("$0: -m not supported for this BT file format\n")
+			croak("$0: -m not supported for LDEO_IX output\n")
 				if defined($opt_m);
 			while (my(@BTr) = &antsFileIn(BTF)) {
 				my($gi) = int($BTr[$BTdF] / $DZ);
@@ -434,7 +435,7 @@ if (defined($opt_r)) {											# reference using velocity profile
 			croak("$opt_r: not a valid reference-velocity file (ANTS format)\n");
 		}
 	} else {													# non-ANTS file (LDEO_IX assumed)
-		croak("$0: -m not supported for this BT file format\n")
+		croak("$0: -m not supported for LDEO_IX output\n")
 			if defined($opt_m);
 		while (<BTF>) {
 			last if /^Columns\s+=\s+z:u:v:err/;
