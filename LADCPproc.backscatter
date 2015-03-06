@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B A C K S C A T T E R 
 #                    doc: Wed Oct 20 13:02:27 2010
-#                    dlm: Thu Mar 27 18:54:02 2014
+#                    dlm: Tue Aug  5 13:32:13 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 25 52 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 30 71 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -23,6 +23,11 @@
 #						 for shallow casts)
 #	Mar 21, 2014: - adapted to new [LADCPproc.utils]
 #	Mar 27, 2014: - adapted to depthOfBinAlongBeam()
+#	Jul 27, 2014: - moved depthOfGI() to [LADCPproc.utils]
+#	Aug  5, 2014: - BUG: find_backscatter_seabed() discarded everything if
+#						 LADCP bin 1 had the backscatter max at the edge of
+#						 the search domain, which could easily happen when
+#						 the bottom stop was a long way from the seabed
 
 my($BEAM1) = 0;
 my($BEAM2) = 1;
@@ -243,8 +248,6 @@ sub mk_backscatter_profs($$)
 	} # for $end
 } # sub
 
-sub depthOfGI($) { return $_[0]*$GRID_DZ + $GRID_DZ/2; }		# depth corresponding to particular grid index
-
 sub find_backscatter_seabed($)
 {
 	my($water_depth) = @_;
@@ -252,7 +255,8 @@ sub find_backscatter_seabed($)
 
 	my($search_below) = max(0,$water_depth-$BT_begin_search_above);
 	my($mdgi) = int($search_below/$GRID_DZ);					# grid index to begin search
-	print(STDERR "\n\t\tlooking for seabed below $search_below m (gi >= $mdgi)") if ($opt_d);
+	printf(STDERR "\n\t\tlooking for seabed below %d m (gi = [%d..%d])",$search_below,$mdgi,scalar(@nSv))
+		if ($opt_d);
 
 	print(STDERR "\n\t\tseabed-max grid indices:") if ($opt_d);
 	
@@ -266,19 +270,13 @@ sub find_backscatter_seabed($)
 			$min = $avg if ($avg < $min);
 			$max = $avg, $gimax = $gi if ($avg > $max);
 		}
-		if ($gimax == $firstvalid) {							# should be robust except maybe for huge bins
-			printf(STDERR "\n\t\tdata from below-seabed bins (%d-%d) discarded",
-				$bin+1,$LADCP{N_BINS}) if ($opt_d);
-			last;
-		}
-		if ($max-$min>10 && $gimax!=$lastvalid) { 				# ignore boundary maxima & scatter
-			printf(STDERR " %d",$gimax-$mdgi) if ($opt_d);
+		if ($max-$min>10 && $gimax!=$firstvalid && $gimax!=$lastvalid) { 				# ignore boundary maxima & scatter
+			printf(STDERR " %d",$gimax) if ($opt_d);
 			push(@wdepth_gi,$gimax);
 		}
 	}
 	
 	return (depthOfGI(avg(@wdepth_gi)),stddev(@wdepth_gi)*$GRID_DZ);
-
 }
 
 1;

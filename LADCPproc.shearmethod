@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . S H E A R M E T H O D 
 #                    doc: Fri Sep 17 20:27:53 2010
-#                    dlm: Sun Jul 27 16:25:56 2014
+#                    dlm: Sun Jul 27 19:44:41 2014
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 314 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 338 65 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # PERLified functions from E. Firing's [merge.c], modified by A.M. Thurnherr
@@ -54,6 +54,7 @@
 #	Jul 27, 2014: - renamed from [LADCPproc.UHmethod] because the code has
 #					diverged quite a bit from the original mplementation. However,
 #					the shear editing core remains as in the UH code
+#				  - added calculation of PACKAGE_VELOCITY (-v)
 
 #======================================================================
 # VELOCITY EDITING
@@ -314,25 +315,37 @@ sub edit_velocity($$)
 #==============================================================================
 
 #----------------------------------------------------------------------
-# uv_to_shear(ens)
+# uv_to_shear(ens,calc_pkg_vel)
 #	- sets @sh_i0, @sh_i1, @dsh, @ush, @vsh, @wsh for a given ensemble
+#	- also sets $LADCP{ENSEMBLE}[$ens]->{PACKAGE_VELOCITY} on -v
 #----------------------------------------------------------------------
 
-sub uv_to_shear($)
+sub uv_to_shear($$)
 {
-	my($ens) = @_;
+	my($ens,$calc_pkg_vel) = @_;
 	my($nvel) = 0;
+	my(@pu,@pv);
 
 	@sh_i0 = @sh_i1 = ();
-	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) { 
+	for (my($bin)=0; $bin<$LADCP{N_BINS}; $bin++) { 								# select valid velocities
 		next if ($edit_flags[$ens][$bin] || $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]==0);
 		$nvel++;
 		push(@sh_i1,$bin) if (@sh_i0);
 		push(@sh_i0,$bin) if ($bin < $LADCP{N_BINS}-1);
+		if (defined($calc_pkg_vel)) {
+			my($ovgi) = int(&depthOfBin($ens,$bin) / $GRID_DZ);
+			push(@pu,$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$U]-$ovu[$ovgi]);
+			push(@pv,$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$V]-$ovv[$ovgi]);
+		}
+    }
+
+    if (defined($calc_pkg_vel)) {													# calculate package velocity
+    	$LADCP{ENSEMBLE}[$ens]->{PACKAGE_VELOCITY}[$U] = avg(@pu);
+    	$LADCP{ENSEMBLE}[$ens]->{PACKAGE_VELOCITY}[$V] = avg(@pv);
     }
 	
 	@dsh = ();
-	for (my($i)=0; $i<@sh_i1; $i++) {								# calc and bin shears
+	for (my($i)=0; $i<@sh_i1; $i++) {												# calc and bin shears
 		my($d0) = &depthOfBin($ens,$sh_i0[$i]);
 		my($d1) = &depthOfBin($ens,$sh_i1[$i]);
 		next unless ($d0>=0 && $d1>=0);
@@ -415,10 +428,10 @@ sub calc_shear($$$$)
 		local(@sh_i0,@sh_i1);
 		local(@dsh,@ush,@vsh,@wsh,@ens);
 
-		uv_to_shear($ens);
+		uv_to_shear($ens,0);
 		if ($edit_shear) {
 			set_shear_flag($ens);
-			$nvel += uv_to_shear($ens);
+			$nvel += uv_to_shear($ens,defined($opt_v));
 			$nsh += @dsh;
 		}
 

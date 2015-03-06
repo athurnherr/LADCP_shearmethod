@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B T 
 #                    doc: Wed Oct 20 21:05:37 2010
-#                    dlm: Thu Sep 19 13:17:41 2013
+#                    dlm: Tue Aug  5 14:38:08 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 119 96 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 205 0 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -15,6 +15,10 @@
 #				  - changed from echo amplitude to Sv
 #	May 16, 2012: - added support for -r)DI BT data
 #	Sep 19, 2013: - added support for $BT_range_method
+#	Aug  5, 2014: - BUG: invalid velocities were used; see July 15 bug fix
+#						 in [LADCPproc.shearmethod]
+#				  - artifically removed BT profile data apparently below
+#				    seabed but that had passed previous tests
 
 my($BEAM1) = 0;
 my($BEAM2) = 1;
@@ -174,7 +178,7 @@ sub binBTprof($)
 
 	if ($opt_k) {
 		for (my($bin)=$BT_bin_start-1; $bin<$LADCP{N_BINS}; $bin++) {
-			next if ($edit_flags[$ens][$bin]);
+			next if ($edit_flags[$ens][$bin] || $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]==0);
 			printf(BTF "%d %d %d %f %f %f %f %f %f %f %f %f %f %f\n",
 				$LADCP{ENSEMBLE}[$ens]->{NUMBER},
 				depthOfBin($ens,$bin),$LADCP{ENSEMBLE}[$ens]->{DEPTH},
@@ -191,13 +195,14 @@ sub binBTprof($)
 	}
 
 	for (my($bin)=$BT_bin_start-1; $bin<$LADCP{N_BINS}; $bin++) {
-		next if ($edit_flags[$ens][$bin]);
-		my($gi) = depthOfBin($ens,$bin) / $GRID_DZ;
+		next if ($edit_flags[$ens][$bin] || $LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]==0);
+		my($dob) = depthOfBin($ens,$bin);
+		next if ($dob > $water_depth);
+		my($gi) = int($dob / $GRID_DZ);
 		push(@{$BTu_vals[$gi]},$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$U]-$CTD_u);
 		push(@{$BTv_vals[$gi]},$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$V]-$CTD_v);
 		push(@{$BTw_vals[$gi]},$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]-$CTD_w);
 	}
-
 }
 
 sub getBTprof($$)

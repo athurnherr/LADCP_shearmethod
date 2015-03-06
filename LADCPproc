@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Sun Jul 27 16:23:50 2014
+#                    dlm: Tue Aug  5 14:39:26 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 103 69 NIL 0 0 72 11 2 4 NIL ofnI
+#                    uE-Info: 410 82 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -101,6 +101,9 @@
 #	May 20, 2014: - merged laptop with whoosher versions (folded in Feb 22 change)
 #	Jul 27, 2014: - renamed LADCPproc.UHcode to LADCPproc.shearmethod, because the code has
 #					diverged more and more from the UH implementation
+#				  - added -v to allow calculation of package velocity
+#	Aug  5, 2014: - BUG: (bad one, too): ref_lr_w called from mk_prof had edited some of the
+#						 horizontal velocity data, which were nevertheless used later on!!!
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
@@ -125,7 +128,7 @@ $ANTSLIBS = $LADCPPROC;							# for -L libraries
 $antsSummary = "$version -- process LADCP data to get shear, time series";
 
 $antsParseHeader = 0;
-&antsUsage('24a:b:c:df:g:i:kl:n:o:p:rs:t:u:w:z',2,
+&antsUsage('24a:b:c:df:g:i:kl:n:o:p:rs:t:u:v:w:z',2,
     '[use -2)dary CTD sensor pair]',
     '[require -4)-beam LADCP solutions]',
     '[use -r)DI bottom-track data]',
@@ -135,6 +138,7 @@ $antsParseHeader = 0;
     '[-i)nitial LADCP time lag <guestimate>]',
     '[-l)ag LADCP <by>] [auto-lag -w)indow <size[120s]>] [-n) <auto-lag windows[20]]',
     '[correct echo amplitude -u)sing D[eines99]|V[isbeck04]|T[hurnherr11]|n[ocorr]',
+    '[ocean -v)elocity <file> for calculating package velocity]',
     '[-d)iagnostic screen output] [-z)oom through problems]',
     'output: [shear-p)rofile <file>] [-t)ime series <file>] [-f)lag <file>] [-b)ottom-track <file>]',
     '        [-a)coustic backscatter <dts-file] [bottom-trac-k) profs]',
@@ -171,7 +175,7 @@ if (defined($opt_c)) {
     croak("$0: cannot decode -c $opt_c\n")
         unless numberp($CC_offset) && numberp($CC_cos_fac) && numberp($CC_sin_fac);
 }
-    
+
 $LADCP_file = &antsFileArg();
 $CTD_file   = &antsFileArg();
 
@@ -219,6 +223,34 @@ $SHEAR_PREGRID_DZ = 20;
 $GRID_DZ = $opt_o;
 
 &antsAddParams('LADCPproc::vertical_resolution',$GRID_DZ);
+
+#----------------------------------------------------------------------
+# Step 2a: Load Ocean Velocity Profile
+#----------------------------------------------------------------------
+
+if (defined($opt_v)) {									# load velocity profile
+	print(STDERR "Reading ocean-velocity profile ($opt_v)...");
+	if (open(OVF,$opt_v)) {
+		@ovl = &antsFileLayout(OVF);
+		$ovdF = &localFnr('depth',@ovl);
+		$ovuF = &localFnr('u',@ovl);
+		$ovvF = &localFnr('v',@ovl);
+		my(@ov) = &antsFileIn(OVF);
+		my($first_depth) = $ov[$ovdF]; my($last_depth);
+		do {
+			push(@ovu,$ov[$ovuF]);
+			push(@ovv,$ov[$ovvF]);
+			$last_depth = $ov[$ovdF];
+		} while (@ov = &antsFileIn(OVF));
+		close(OVF);
+		croak("$opt_v: incompatible depth grid\n")
+			unless (($last_depth-$first_depth) == $#ovu*$GRID_DZ);
+	    printf(STDERR "\n\t%d velocities",scalar(@ovv)) if ($opt_d);
+	} else {
+		printf(STDERR "\n\n\t\tWARNING: $opt_v: $!\n");
+	}
+	print(STDERR "\n");
+}
 
 #----------------------------------------------------------------------
 # Step 3: Read CTD data
@@ -328,6 +360,7 @@ if ($LADCP{BEAM_COORDINATES}) {
 			@{$LADCP{ENSEMBLE}[$ens]->{BEAM_VEL}[$bin]} =  @{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]};
 			@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]} =
 				velInstrumentToEarth(\%LADCP,$ens,velBeamToInstrument(\%LADCP,@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]}));
+#			print(STDERR "<$ens,$bin>: @{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]}\n");
 			@{$LADCP{ENSEMBLE}[$ens]->{PERCENT_GOOD}[$bin]} =					# fake it to fool ref_lr_w
 				(0,0,0,defined($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]) ? 100 : 0);
 		}
@@ -373,8 +406,8 @@ if ($LADCP{BEAM_COORDINATES}) {
 print(STDERR "\t\tconstructing profile time series...")
 	if ($opt_d);
 	
-($LADCP_start,$LADCP_end,$LADCP_bottom,$w_gap_time,$zErr,$maxz) =
-	mk_prof(\%LADCP,0,undef,1,6,70,0.1,$LADCP_max_gap);
+($LADCP_start,$LADCP_end,$LADCP_bottom,$w_gap_time,$zErr,$maxz) =	# NB: chose parameters to avoid editing by
+	mk_prof(\%LADCP,0,undef,1,6,0,0.1,$LADCP_max_gap,0);			#	  ref_lr_w
 croak("\n$LADCP_file: no good ensembles found\n")
     unless defined($LADCP_start);
 
@@ -559,6 +592,8 @@ if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
 print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) output...");
 
 @antsNewLayout = ('ens','elapsed','CTD_depth','downcast','CTD_lat','CTD_lon','depth','u_z','v_z','w_z');
+push(@antsNewLayout,'pkg_u','pkg_v')
+	if defined($opt_v);
 
 	#--------------------------------------------------------------------------------
 	# callback routine to output .tds data, called once each for down-/upcasts after
@@ -580,23 +615,31 @@ print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) ou
 						   'LADCPproc::min_depth',depthOfGI($mingi),'LADCPproc::max_depth',depthOfGI($#ens_vals));
 			for (my($gi)=0; $gi<@ush_vals; $gi++) {
 				for (my($i)=0; $i<@{$ush_vals[$gi]}; $i++){
-					&antsOut($ens_vals[$gi][$i],
-							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
-							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{DEPTH},$downcast,
-							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LAT},
-							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LON},
-							 depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
+					my(@out) = ($ens_vals[$gi][$i],
+							 	$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+							 	$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{DEPTH},$downcast,
+							 	$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LAT},
+							 	$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LON},
+							 	depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
+					push(@out,$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{PACKAGE_VELOCITY}[$U],
+ 							  $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{PACKAGE_VELOCITY}[$V])
+							  	if defined($opt_v);
+					&antsOut(@out); 							  
 				}
 	        }
 		} else {
 			for (my($gi)=$#ush_vals; $gi>=0; $gi--) {
 				for (my($i)=0; $i<@{$ush_vals[$gi]}; $i++) {
-					&antsOut($ens_vals[$gi][$i],
-							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
-							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{DEPTH},$downcast,
-							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LAT},
-							 $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LON},
-							 depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
+					my(@out) = ($ens_vals[$gi][$i],
+							 	$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{ELAPSED_TIME}+$CTD{first_elapsed}-$opt_l,
+							 	$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{DEPTH},$downcast,
+							 	$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LAT},
+							 	$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{CTD_LON},
+							 	depthOfGI($gi),$ush_vals[$gi][$i],$vsh_vals[$gi][$i],$wsh_vals[$gi][$i]);
+					push(@out,$LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{PACKAGE_VELOCITY}[$U],
+ 							  $LADCP{ENSEMBLE}[$ens_vals[$gi][$i]]->{PACKAGE_VELOCITY}[$V])
+							  	if defined($opt_v);
+					&antsOut(@out); 							  
 				}
 	        }
 	    }
