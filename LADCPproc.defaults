@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . D E F A U L T S 
 #                    doc: Fri Sep 17 09:44:21 2010
-#                    dlm: Tue May 20 10:49:52 2014
+#                    dlm: Wed May 28 23:23:41 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 289 0 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 260 0 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # default parameters for [LADCPproc]
@@ -262,6 +262,8 @@ $e_max = 0.1;
 
 ##   min_correlation (BB only) is the minimum correlation, in
 ##      counts, for each beam in a given bin.
+#	mk_prof() in [RDI_Utils.pl] removes all velocities with
+#	correlations < 70 before this criterion is applied.
 
 $min_cor = 70;
 
