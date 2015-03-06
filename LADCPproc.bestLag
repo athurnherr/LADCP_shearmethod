@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B E S T L A G 
 #                    doc: Tue Sep 28 21:58:48 2010
-#                    dlm: Wed Mar 19 21:33:30 2014
+#                    dlm: Sun May 25 21:16:27 2014
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 28 45 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 31 72 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # TODO:
@@ -26,6 +26,9 @@
 #	Oct 19, 2012: - BUG: opt_i had wrong sign!
 #	Jun 25, 2013: - adapted to :: %PARAM convention
 #	Mar 19, 2014: - moved %PARAM to LADCPproc
+#	May 25, 2015: - added assertion to require numeric interpolated LADCP_w
+#				  - BUG: interp_LADCP_w left gaps
+#				  - added debug code to output bestLag input time series
 
 sub interp_LADCP_w($$)
 {
@@ -33,9 +36,9 @@ sub interp_LADCP_w($$)
 	my($sc) = ($elapsed - $LADCP{ENSEMBLE}[$ens-1]->{ELAPSED_TIME}) /
 			  ($LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME} -
 					$LADCP{ENSEMBLE}[$ens-1]->{ELAPSED_TIME});
-	unless (numberp($LADCP{ENSEMBLE}[$ens-1]->{W})) {
+	unless (numberp($LADCP{ENSEMBLE}[$ens]->{W})) {
 		$nGaps++;
-		return $LADCP{ENSEMBLE}[$ens]->{W};
+		$LADCP{ENSEMBLE}[$ens]->{W} = $LADCP{ENSEMBLE}[$ens-1]->{W};
 	}
 	return $LADCP{ENSEMBLE}[$ens-1]->{W} +
 				$sc * ($LADCP{ENSEMBLE}[$ens]->{W} - $LADCP{ENSEMBLE}[$ens-1]->{W});
@@ -114,8 +117,11 @@ sub lagLADCP2CTD()
 	for (my($ens)=$LADCP_start,my($r)=0; $ens<=$LADCP_end; $ens++) {
 		while ($r*$CTD{sampint} < $LADCP{ENSEMBLE}[$ens]->{ELAPSED_TIME}) {
 			unless ($first_guess_lag > $r) {
-				$LADCP_w[$r-$first_guess_lag] = interp_LADCP_w($r*$CTD{sampint},$ens);
+				my($w) = interp_LADCP_w($r*$CTD{sampint},$ens);
+				next if (!defined($firstValid) && !defined($w));
 				$firstValid = $r-$first_guess_lag unless defined($firstValid);
+				die("assertion failed") unless defined($w);
+				$LADCP_w[$r-$first_guess_lag] = $w;
 				$nValid++;
 			}
 			$r++;
@@ -126,6 +132,17 @@ sub lagLADCP2CTD()
 		if ($opt_d);
 	
 	print(STDERR "\n");
+
+	#----------------------------------------------------------------------
+	# Output w Time Series
+	#----------------------------------------------------------------------
+
+#	open(F,'>bestLag.out');
+#	print(F "#ANTS#FIELDS# {rec} {LADCP_w} {CTD_w}\n");
+#	for (my($r)=$firstValid; $r<$firstValid+$nValid; $r++) {
+#		print(F "$r $LADCP_w[$r] $CTD{w}[$r]\n");
+#	}
+#	close(F);
 
 	#----------------------------------------------------------------------
 	# Calculate lags
