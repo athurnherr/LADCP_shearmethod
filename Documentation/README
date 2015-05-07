@@ -1,9 +1,9 @@
 ======================================================================
                     R E A D M E 
                     doc: Tue May 15 18:10:40 2012
-                    dlm: Sat Mar 16 13:27:24 2013
+                    dlm: Thu May  7 13:02:10 2015
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 18 14 NIL 0 0 72 3 2 8 NIL ofnI
+                    uE-Info: 78 38 NIL 0 0 72 3 2 8 NIL ofnI
 ======================================================================
 
 This directory contains a re-implementation of the shear method for
@@ -42,11 +42,11 @@ THIS SOFTWARE CAN BE FREELY USED AND COPIED FOR EDUCATIONAL OR OTHER
 NOT-FOR-PROFIT PURPOSES.
 
 Currently, limited documentation is provided in the following set of
-README files:
+files:
 
 [README]		This overview
 
-[README.Install]	Installation instructions
+[README.Install]	Software installation instructions
 
 [README.ProcessData]	A HowTo for obtaining shear, as well as relative
 			and absolute velocity profiles from CTD/LADCP
@@ -71,7 +71,11 @@ README files:
 			arithmetic mean.
 
 [README.YoYo]		Notes on how to process data from "non-standard"
-			casts, such as yoyo's and tow-yo's. 
+			casts, such as yoyo's and tow-yo's.
+
+[Slocum-Explorer_HowTo.pdf] Cookbook describing how to process
+			velocity data collected with Explorer ADCPs on
+			Slocum gliders
 
 NOTE: Most of the source files use a hard tab of 4 spaces, i.e. they
 can be viewed correctly, e.g. with "less -x4".

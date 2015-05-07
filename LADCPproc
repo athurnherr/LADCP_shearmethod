@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Tue Aug  5 14:39:26 2014
+#                    dlm: Fri Mar  6 19:02:59 2015
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 410 82 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 116 0 NIL 0 0 72 10 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -104,10 +104,14 @@
 #				  - added -v to allow calculation of package velocity
 #	Aug  5, 2014: - BUG: (bad one, too): ref_lr_w called from mk_prof had edited some of the
 #						 horizontal velocity data, which were nevertheless used later on!!!
+#	Mar  6, 2015: - adapted to ANTS V6 (library versioning)
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 ($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
 ($LADCPPROC)  = ($0 =~ m{^(.*)/[^/]*$});
+
+$antsSummary = "$version -- process LADCP data to get shear, time series";
+$antsMinLibVersion = 6.0;
 
 require "$ANTS/ants.pl";
 require "$ANTS/libEOS83.pl";
@@ -124,8 +128,6 @@ require "$PERL_TOOLS/RDI_Coords.pl";
 require "$PERL_TOOLS/RDI_Utils.pl";
 
 $ANTSLIBS = $LADCPPROC;							# for -L libraries
-
-$antsSummary = "$version -- process LADCP data to get shear, time series";
 
 $antsParseHeader = 0;
 &antsUsage('24a:b:c:df:g:i:kl:n:o:p:rs:t:u:v:w:z',2,
