@@ -2,12 +2,13 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Fri Mar  6 15:51:49 2015
+#                    dlm: Wed May 13 19:47:05 2015
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 8 0 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 61 30 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
+$antsMinLibVersion = 6.0;
 
 # NOTES:
 #	- the core of this code is a simplified version of avg_sh.m and
@@ -57,6 +58,7 @@ $antsSummary = 'integrate LADCP shear';
 #	Jul 12, 2013: - clarified -u usage with better messages
 #	Mar 20, 2014: - fiddled while debugging [LADCPproc]
 #	Jun  7, 2014: - improved error messages
+#	May 13, 2015: - belatedly adapted to ANTS V6 (library versioning)
 
 ($ANTS) = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
