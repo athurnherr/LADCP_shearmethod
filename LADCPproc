@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P P R O C 
 #                    doc: Thu Sep 16 20:36:10 2010
-#                    dlm: Fri Mar  6 19:02:59 2015
+#                    dlm: Sat Dec  9 20:29:59 2017
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 116 0 NIL 0 0 72 10 2 4 NIL ofnI
+#                    uE-Info: 139 0 NIL 0 0 72 0 2 4 NIL ofnI
 #======================================================================
 
 # NOTES:
@@ -22,9 +22,6 @@
 #		- is from CTD to allow yoyo processing without loss of time information
 #		- to obtain LADCP time, add %LADCP_time_lag to CTD time
 #		- %LADCP_time_lag can be used for -l
-#		- -i is different: it should be set to the number that is added to
-#						   LADCP_elapsed to get the CTD time, i.e.
-#						   -%LADCP_time_lag
 #   - CTD{elapsed} is undefined for records before instrument is in the water
 #   - ITS-90 temp field in degC required
 #   - salin field prequired
@@ -105,13 +102,21 @@
 #	Aug  5, 2014: - BUG: (bad one, too): ref_lr_w called from mk_prof had edited some of the
 #						 horizontal velocity data, which were nevertheless used later on!!!
 #	Mar  6, 2015: - adapted to ANTS V6 (library versioning)
+#	Nov  2, 2015: - improved magdec output check
+#	Feb 19, 2016: - added -x
+#				  - switched sign semantics of -i for consistency with -l
+#				  - suppressed stdout on tty
+#   May 19, 2016: - adapted to velBeamToEarth()
+#				  - added ADCP_tools version checking
+#	Dec  9, 2016: - added $antsSuppressCommonOptions = 1;
 
 ($ANTS)    = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
-($PERL_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
+($ADCP_TOOLS) = (`which mkProfile` =~ m{^(.*)/[^/]*$});
 ($LADCPPROC)  = ($0 =~ m{^(.*)/[^/]*$});
 
 $antsSummary = "$version -- process LADCP data to get shear, time series";
 $antsMinLibVersion = 6.0;
+$ADCP_tools_minVersion  = 1.6;
 
 require "$ANTS/ants.pl";
 require "$ANTS/libEOS83.pl";
@@ -123,18 +128,19 @@ require "$LADCPPROC/LADCPproc.bestLag";
 require "$LADCPPROC/LADCPproc.BT";
 require "$LADCPPROC/LADCPproc.backscatter";
 require "$LADCPPROC/LADCPproc.shearmethod";
-require "$PERL_TOOLS/RDI_BB_Read.pl";
-require "$PERL_TOOLS/RDI_Coords.pl";
-require "$PERL_TOOLS/RDI_Utils.pl";
+require "$ADCP_TOOLS/ADCP_tools_lib.pl";
+require "$ADCP_TOOLS/RDI_Coords.pl";
+require "$ADCP_TOOLS/RDI_Utils.pl";
 
 $ANTSLIBS = $LADCPPROC;							# for -L libraries
 
 $antsParseHeader = 0;
-&antsUsage('24a:b:c:df:g:i:kl:n:o:p:rs:t:u:v:w:z',2,
+$antsSuppressCommonOptions = 1;
+&antsUsage('24a:b:c:df:g:i:kl:n:o:p:rs:t:u:v:w:x:z',2,
     '[use -2)dary CTD sensor pair]',
     '[require -4)-beam LADCP solutions]',
     '[use -r)DI bottom-track data]',
-    '[-s)etup <file>] [-g)ps <lat,lon>]',
+    '[-s)etup <file>] [e-x)ecute <perl-expr>] [-g)ps <lat,lon>]',
     '[-c)ompass-corr <offset,cos-fac,sin-fac>]',
     '[-o)utput grid <resolution[5m]>]',
     '[-i)nitial LADCP time lag <guestimate>]',
@@ -218,6 +224,12 @@ if ($LADCP{BLANKING_DISTANCE} == 0) {
     $BT_bin_start = 2 unless ($BT_bin_start > 2);
 }
 
+if (defined($opt_x)) {													# eval cmd-line expression to override anything
+	$processing_options .= " -x $opt_x";
+	eval($opt_x);
+}
+
+
 &antsAddParams('LADCPproc::instrument_orientation',
         $LADCP{ENSEMBLE}[0]->{XDUCER_FACING_UP} ? 'UL' : 'DL');
 
@@ -269,7 +281,7 @@ my($day  ) = substr($LADCP{ENSEMBLE}[0]->{DATE},3,2);
 my($magdec,$maginc,$h_strength,$v_strength) = split('\s+',`magdec $CTD{stn_lon} $CTD{stn_lat} $year $month $day`);
 
 croak("$0: unknown magnetic declination\n")
-	unless defined($magdec);
+	unless numberp($magdec);
 
 &antsAddParams('LADCPproc::magnetic_declination',$magdec);
 
@@ -359,15 +371,12 @@ if ($LADCP{BEAM_COORDINATES}) {
 				undef($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$bad_beam-1]);
 				undef($LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}[$bin][$bad_beam-1]);
 			}
-			@{$LADCP{ENSEMBLE}[$ens]->{BEAM_VEL}[$bin]} =  @{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]};
-			@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]} =
-				velInstrumentToEarth(\%LADCP,$ens,velBeamToInstrument(\%LADCP,@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]}));
-#			print(STDERR "<$ens,$bin>: @{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]}\n");
+			@{$LADCP{ENSEMBLE}[$ens]->{BEAM_VEL}[$bin]} = @{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]};
+			@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]} = velBeamToEarth(\%LADCP,$ens,@{$LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin]});
 			@{$LADCP{ENSEMBLE}[$ens]->{PERCENT_GOOD}[$bin]} =					# fake it to fool ref_lr_w
 				(0,0,0,defined($LADCP{ENSEMBLE}[$ens]->{VELOCITY}[$bin][$W]) ? 100 : 0);
 		}
-		@{$LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}} =
-			velInstrumentToEarth(\%LADCP,$ens,velBeamToInstrument(\%LADCP,@{$LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}}));
+		@{$LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}} = velBeamToEarth(\%LADCP,$ens,@{$LADCP{ENSEMBLE}[$ens]->{BT_VELOCITY}});
 	}
 
 	$LADCP{BEAM_COORDINATES} = 0;
@@ -591,7 +600,12 @@ if ($LADCP{ENSEMBLE}[$LADCP_start]->{XDUCER_FACING_DOWN}) {
 # Step 8: Edit Data & also produce depth-time-series output via callback
 #-----------------------------------------------------------------------
 
-print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) output...");
+if (-t 1) {
+	print(STDERR "Calculating shear profiles...");
+	close(STDOUT);
+} else {
+	print(STDERR "Calculating shear profiles & producing time-depth-series (.tds) output...");
+}
 
 @antsNewLayout = ('ens','elapsed','CTD_depth','downcast','CTD_lat','CTD_lon','depth','u_z','v_z','w_z');
 push(@antsNewLayout,'pkg_u','pkg_v')

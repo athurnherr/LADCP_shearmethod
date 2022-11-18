@@ -2,9 +2,9 @@
 #======================================================================
 #                    L A D C P I N T S H 
 #                    doc: Thu Oct 14 21:22:50 2010
-#                    dlm: Wed May 13 19:47:05 2015
+#                    dlm: Tue Jul 13 11:22:44 2021
 #                    (c) 2010 A.M. Thurnherr & E. Firing
-#                    uE-Info: 61 30 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 484 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 $antsSummary = 'integrate LADCP shear';
@@ -59,16 +59,20 @@ $antsMinLibVersion = 6.0;
 #	Mar 20, 2014: - fiddled while debugging [LADCPproc]
 #	Jun  7, 2014: - improved error messages
 #	May 13, 2015: - belatedly adapted to ANTS V6 (library versioning)
+#	Dec 22, 2015: - added wa-k)e editing
+#				  - BUG: uplooker data were weighted ~2x DL data
+#	Dec  9, 2017: - added $antsSuppressCommonOptions = 1;
 
 ($ANTS) = (`which ANTSlib` =~ m{^(.*)/[^/]*$});
 require "$ANTS/ants.pl";
 require "$ANTS/libstats.pl";
 
-&antsUsage('dm:n:r:s:w:u:',0,
+$antsSuppressCommonOptions = 1;
+&antsUsage('dkm:n:r:s:w:u:',0,
 	'[-d)ebug]',
 	'[-r)eference with <BT or SADCP file> [-m)in <samp[10]>]]',
 	'[secondary -u)plooker <shear file>]',
-	'[min -n) <shear samp[10]>]',
+	'[min -n) <shear samp[10]>] [enable wa-k)e editing]',
 	'[output -s)hear-pro <file>]',
 	'[LADCP shear file]');
 
@@ -155,25 +159,33 @@ $uc_elapsedF = fnr('uc_elapsed');
 
 my(@gaps); my($curGap) = 0;
 
+&antsInfo('WARNING: -k assumes downlooker data (implementation restriction)')
+	if ($opt_k && !$opt_u);
+
 for (my($r)=0; &antsIn(); $r++) {
 	my(@UL_);
 	if (defined($opt_u)) {
 		@UL_ = &antsFileIn(ULF);							# read UL shear data
-		undef($opt_u) unless (@UL_);						# cheap trick
+		undef($opt_u) unless (@UL_);						# cheap trick at EOF
 	}
 
 	$depth[$r] = $ants_[0][$depthF];						## depth grid values
 	croak("$opt_u: inconsistent depth record $r (DL: $depth[$r]; UL: $UL_[$depthF])\n")
 		if defined($opt_u) && ($UL_[$depthF] != $depth[$r]);
 		
-	$dc_nsamp = $ants_[0][$dc_nshF];						# number of shear samples
-	$uc_nsamp = $ants_[0][$uc_nshF];
-	if (defined($opt_u)) {
-		$dl_nsamp = $dc_nsamp + $uc_nsamp;
-		$dc_nsamp += $UL_[$dc_nshF];
-		$uc_nsamp += $UL_[$uc_nshF];
-		$ul_nsamp = $dc_nsamp + $uc_nsamp;
-	}
+	if ($opt_u) {											# dual-head instrument
+		$ants_[0][$uc_nshF] = $UL_[$dc_nshF] = 0			# wake editing: ignore DL uc, UL dc
+			if ($opt_k);
+		$dl_nsamp = $ants_[0][$dc_nshF] + $ants_[0][$uc_nshF];
+		$ul_nsamp = $UL_[$dc_nshF] + $UL_[$uc_nshF];
+		$dc_nsamp = $ants_[0][$dc_nshF] + $UL_[$dc_nshF];
+		$uc_nsamp = $ants_[0][$uc_nshF] + $UL_[$uc_nshF];
+	} else {												# single-head instrument
+		$ants_[0][$uc_nshF] = 0
+			if ($opt_k);
+		$dc_nsamp = $ants_[0][$dc_nshF];
+		$uc_nsamp = $ants_[0][$uc_nshF];
+    }
 	
 	$dc_nsamp[$r] = $dc_nsamp;								# save for each record
 	$uc_nsamp[$r] = $uc_nsamp;

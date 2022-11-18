@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . L O A D C T D 
 #                    doc: Thu Dec  9 18:39:01 2010
-#                    dlm: Sun Sep 14 21:20:12 2014
+#                    dlm: Tue Feb 16 11:59:56 2016
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 37 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 57 43 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -25,11 +25,44 @@
 #	Sep 25, 2013: - renamed "std" %PARAMs %lat, %lon, %ITS to conform to new convention
 #				  - added support for carry-through of lat/lon info
 #	Nov 11, 2013: - BUG: lat/lon did not work any more?!?
+#	Nov  2, 2015: - added lat/lon range checks
+#	Feb 16, 2016: - changed semantics to assume it's a cnv file if it called *.cnv
+#				  - added support for ANTS files
 
 sub readCTD_ASCII($$)
 {
 	my($fn,$dtaR) = @_;
 
+	open(F,$fn) || croak("$fn: $!\n");
+	my($buf); $buf = <F>;
+
+	if ($buf =~ /perl -S list$/) {							# ANTS file
+		my(%CTDP) = &antsFileParams(F);
+		croak("$fn: %sampling_interval not defined\n")
+			unless numberp($CTDP{sampling_interval});
+		$dtaR->{sampint} = $CTDP{sampling_interval};
+		$dtaR->{stn_lat} = $CTDP{lat};
+		$dtaR->{stn_lon} = $CTDP{lon};
+		
+		my(@CTDl) = &antsFileLayout(F);
+		my($pf) = localFnr('press',@CTDl);
+		my($tf) = localFnr('temp',@CTDl);
+		my($sf) = localFnr('salin',@CTDl);
+		
+		while (1) {
+			my(@CTDr);
+			last unless (@CTDr = &antsFileIn(F));
+			push(@{$dtaR->{press}},$CTDr[$pf]);
+			push(@{$dtaR->{temp}}, $CTDr[$tf]);
+			push(@{$dtaR->{salin}},$CTDr[$sf]);
+		}
+		close(F);
+		return;
+	}
+	
+	seek(F,0,0) || croak("$fn: $!\n");
+	croak("$fn: \$CTD_ASCII_sampfreq required but not set\n")
+											  unless defined($CTD_ASCII_sampfreq);
 	croak("$fn: unknown pressure field\n")    unless defined($CTD_ASCII_press_field);
 	croak("$fn: unknown temperature field\n") unless defined($CTD_ASCII_temp_field);
 	croak("$fn: unknown salinity field\n")    unless defined($CTD_ASCII_salin_field);
@@ -37,10 +70,8 @@ sub readCTD_ASCII($$)
 		croak("$fn: unknown latitude field\n")    unless defined($CTD_ASCII_lat_field);
 		croak("$fn: unknown longitude field\n")   unless defined($CTD_ASCII_lon_field);
 	}
-
 	$CTD_ASCII_badval = 9e99 unless defined($CTD_ASCII_badval);
 
-	open(F,$fn) || croak("$fn: $!\n");
 	my($sumLat,$sumLon); my($nPos) = 0;
 	my($ds);
 	my($skip) = $CTD_ASCII_header_lines;
@@ -202,15 +233,17 @@ sub readCTD($$)
 {
 	my($fn,$dtaR) = @_;
 
-	if (defined($CTD_ASCII_sampfreq)) {
-		readCTD_ASCII($fn,$dtaR);
-	} else {
+	if ($fn =~ m/\.cnv$/) {
 		readCTD_CNV($fn,$dtaR);
-	}
+	} else {
+		readCTD_ASCII($fn,$dtaR);
+	} 
 
-	croak("$0: unknown latitude\n") unless defined($dtaR->{stn_lat});
+	croak("\n$CTD_file: unknown latitude\n") unless defined($dtaR->{stn_lat});
+	croak("\n$CTD_file: lat $dtaR->{stn_lat} out of range\n") unless ($dtaR->{stn_lat} >=-90 && $dtaR->{stn_lat}<=90);
 	&antsAddParams('LADCPproc::CTD_lat',$dtaR->{stn_lat});
-	croak("$0: unknown longitude\n") unless defined($dtaR->{stn_lon});
+	croak("\n$CTD_file: unknown longitude\n") unless defined($dtaR->{stn_lon});
+	croak("\n$CTD_file: lon $dtaR->{stn_lon} out of range\n") unless ($dtaR->{stn_lon} >=-180 && $dtaR->{stn_lon}<=360);
 	&antsAddParams('LADCPproc::CTD_lon',$dtaR->{stn_lon});
 
 	&antsAddParams('LADCPproc::CTD_sampfreq',1/$dtaR->{sampint});

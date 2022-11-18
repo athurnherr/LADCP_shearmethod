@@ -1,9 +1,9 @@
 ======================================================================
                     R E A D M E . P R O C E S S D A T A 
                     doc: Tue May 15 18:49:00 2012
-                    dlm: Fri Jul 12 12:07:38 2013
+                    dlm: Fri Feb 19 13:27:10 2016
                     (c) 2012 A.M. Thurnherr
-                    uE-Info: 118 71 NIL 0 0 72 75 2 8 NIL ofnI
+                    uE-Info: 72 0 NIL 0 0 72 75 2 8 NIL ofnI
 ======================================================================
 
 =Overview=
@@ -59,17 +59,17 @@ Input files:
 	001UL000.000	uplooker ADCP file
 	001.cnv		CTD file
 
-LADCPproc -p 001DL.sh -b 001.BT 001DL000.000 001.cnv > /dev/null
+LADCPproc -p 001DL.sh -b 001.BT 001DL000.000 001.cnv
 	- this example creates two files, 001DL.sh (shear profiles) and
 	  001.BT (bottom-track data)
-	- the default output (STDOUT) from [LADCPproc] is a list of
-	  valid shear samples, which is ignored (sent to /dev/null) in
-	  this example
+	- if STDOUT from [LADCPproc] is redirected, a file with all
+	  valid shear samples is produced as well; this is not required
+	  for standard velocity processing
 	- it is recommended that the diagnostic output (STDERR) is
 	  captured in a log file; refer to the manual of your shell on
 	  how to accomplish this
 
-LADCPproc -p 001UL.sh 001UL000.000 001.cnv > /dev/null
+LADCPproc -p 001UL.sh 001UL000.000 001.cnv
 	- this example creates one file, 001UL.sh (shear profiles)
 
 

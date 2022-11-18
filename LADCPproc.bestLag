@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B E S T L A G 
 #                    doc: Tue Sep 28 21:58:48 2010
-#                    dlm: Fri Mar  6 15:53:43 2015
+#                    dlm: Tue May 15 22:25:52 2018
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 33 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 34 64 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # TODO:
@@ -30,6 +30,8 @@
 #	May 25, 2015: - added assertion to require numeric interpolated LADCP_w
 #				  - BUG: interp_LADCP_w left gaps
 #				  - added debug code to output bestLag input time series
+#	Feb 19, 2016: - BUG: opt_i had wrong sign (fix from Oct 2012 was wrong)
+#	May 15, 2018: - improved lag detection for files with w gaps
 
 sub interp_LADCP_w($$)
 {
@@ -89,7 +91,7 @@ sub lagLADCP2CTD()
 	my($first_guess_lag);											# in units of CTD records
 	
 	if (defined($opt_i)) {
-		$first_guess_lag = $opt_i / $CTD{sampint};
+		$first_guess_lag = -$opt_i / $CTD{sampint};
 	} else {
 		my($CTD_10pct_down) = 0;
 		$CTD_10pct_down++											# "until" formulation allows for missing pressures
@@ -156,13 +158,14 @@ sub lagLADCP2CTD()
 	# carry out opt_n lag correlations and keep tally of the results
 	#---------------------------------------------------------------
 	my(%nBest);
-	my($nLags) = 0;
+	my($nLags) = my($nValidLags) = 0;
 	my($lags) = '';
 	my($lastLag) = 9e99; my($nSame) = 1;
 	for (my($window)=0; $window<$opt_n; $window++) {
 		my($ws) = $firstValid + $window * int($nValid/$opt_n);	# window start
 		$ws = @LADCP_w-$opt_w if ($ws+$opt_w >= @LADCP_w);
 		$bestLag = bestLag($ws);
+		$nValidLags++ if numberp($bestLag);
 		if (defined($bestLag)) {
 			if (defined($lastLag) && $bestLag == $lastLag) {
 				$nSame++;
@@ -199,7 +202,7 @@ sub lagLADCP2CTD()
 		$best_lag = $i if ($nBest{$i} > $nBest{$best_lag});
 	}
 	croak("\n$0: cannot determine a valid lag\n")
-		unless ($opt_z || $nBest{$best_lag}>$opt_n/3);
+		unless ($opt_z || $nBest{$best_lag}>$nValidLags/3);
 	print(STDERR "\n\n\t\tWARNING: only $nBest{$best_lag} of the lag estimates agree!\n")
 		if ($nBest{$best_lag} < $opt_n/2);
 
