@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . B A C K S C A T T E R 
 #                    doc: Wed Oct 20 13:02:27 2010
-#                    dlm: Fri Mar  6 15:52:50 2015
+#                    dlm: Thu Sep 21 14:12:23 2023
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 32 0 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 129 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -29,6 +29,8 @@
 #						 LADCP bin 1 had the backscatter max at the edge of
 #						 the search domain, which could easily happen when
 #						 the bottom stop was a long way from the seabed
+#	Sep 21, 2023: - added Sv_GH10() -- Gostiaux-von Haren method
+# HISTORY END
 
 my($BEAM1) = 0;
 my($BEAM2) = 1;
@@ -99,6 +101,37 @@ sub Sv_D99($$$$$)
     
     return $C + 10*log10(($temp+273)*$R**2) - $Ldbm - $PdbW
               + 2*$alpha*$R + $Kc*($EA-$Er);
+}
+
+#----------------------------------------------------------------------
+# Volume Scattering Coefficient following Gostiaux and van Haren (JAOT
+#	2010), which a correction to Deines (IEEE 1999) for low-backscatter
+#	data. For an overview discussion that minimizes the contribution
+#	of GvH, see Mullison (IEEE 2020).
+# NOTES:
+#	- instrument specific! (300kHz Workhorse)
+#   - no sound-speed correction applied
+#   - R in bin center, instead of last quarter
+#   - transmit power assumes 33V batteries
+#----------------------------------------------------------------------
+
+sub log10 {
+    my $n = shift;
+    return log($n)/log(10);
+}   
+
+sub Sv_GH10($$$$$)												# Gostiaux and van Haren (JAOT 2010)
+{
+    my($temp,$PL,$Er,$R,$EA) = @_;
+    my($C)      = -143;                 # RDI Workhorse monitor
+    my($Ldbm)   = 10 * log10($PL);
+    my($PdbW)   = 14.0;
+    my($alpha)  = 0.069;
+#    my($alpha)  = 0.048;
+    my($Kc)     = 0.45;
+    
+    return $C + 10*log10(($temp+273)*$R**2) - $Ldbm - $PdbW
+              + 2*$alpha*$R + 10*log10(10**($Kc*($EA-$Er)/10) - 1);
 }
 
 #----------------------------------------------------------------------
@@ -215,7 +248,9 @@ sub mk_backscatter_profs($$)
 	print(STDERR "\n\t\@per-beam noise levels = @Er") if ($opt_d);
 
 	my($Svfunc);											# Sv method
-	if ($opt_u =~ /^[dD]/) {
+	if ($opt_u =~ /^[gG]/) {
+		$Svfunc = \&Sv_GH10;
+	} elsif ($opt_u =~ /^[dD]/) {
 		$Svfunc = \&Sv_D99;
 	} elsif ($opt_u =~ /^[vV]/) {
 		$Svfunc = \&Sv_V04;

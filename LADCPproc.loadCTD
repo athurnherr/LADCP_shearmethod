@@ -1,9 +1,9 @@
 #======================================================================
 #                    L A D C P P R O C . L O A D C T D 
 #                    doc: Thu Dec  9 18:39:01 2010
-#                    dlm: Tue Feb 16 11:59:56 2016
+#                    dlm: Tue Sep 19 19:56:27 2023
 #                    (c) 2010 A.M. Thurnherr
-#                    uE-Info: 57 43 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 32 33 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -28,6 +28,9 @@
 #	Nov  2, 2015: - added lat/lon range checks
 #	Feb 16, 2016: - changed semantics to assume it's a cnv file if it called *.cnv
 #				  - added support for ANTS files
+#	Sep 19, 2023: - changed semantics to use elapsed field instead of %sampling_interval
+#					in ANTS files
+# HISTORY END
 
 sub readCTD_ASCII($$)
 {
@@ -38,25 +41,32 @@ sub readCTD_ASCII($$)
 
 	if ($buf =~ /perl -S list$/) {							# ANTS file
 		my(%CTDP) = &antsFileParams(F);
-		croak("$fn: %sampling_interval not defined\n")
-			unless numberp($CTDP{sampling_interval});
-		$dtaR->{sampint} = $CTDP{sampling_interval};
 		$dtaR->{stn_lat} = $CTDP{lat};
 		$dtaR->{stn_lon} = $CTDP{lon};
-		
+
 		my(@CTDl) = &antsFileLayout(F);
+		my($ef) = localFnr('elapsed',@CTDl);
 		my($pf) = localFnr('press',@CTDl);
 		my($tf) = localFnr('temp',@CTDl);
 		my($sf) = localFnr('salin',@CTDl);
+		croak("$fn: need elapsed, press, temp and salin fields\n")
+			unless defined($ef) && defined($pf) &&
+				   defined($tf) && defined($sf);
 		
+		my($fe,$te,$ne);
 		while (1) {
 			my(@CTDr);
 			last unless (@CTDr = &antsFileIn(F));
+			$fe = $CTDr[$ef] if numberp($CTDr[$ef]) && !defined($fe);
+			$le = $CTDr[$ef],$ne++ if numberp($CTDr[$ef]);				
 			push(@{$dtaR->{press}},$CTDr[$pf]);
 			push(@{$dtaR->{temp}}, $CTDr[$tf]);
 			push(@{$dtaR->{salin}},$CTDr[$sf]);
 		}
 		close(F);
+
+		$dtaR->{sampint} = ($le - $fe) / ($ne - 1);
+		
 		return;
 	}
 	
